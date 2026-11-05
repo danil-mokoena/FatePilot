@@ -1,0 +1,25 @@
+[
+  {
+    "Author": "Mokoena",
+    "Name": "FatePilot",
+    "InternalName": "FatePilot",
+    "AssemblyVersion": "0.1.0.0",
+    "Description": "Experimental 0.1: combat FATE routes, zone and instance rotation, return goals and teleport budgets. Requires the integrations listed in the README. In-game validation is pending. /fatepilot",
+    "Punchline": "Chart your route. Find your destiny. By Mokoena.",
+    "RepoUrl": "https://github.com/danil-mokoena/FatePilot",
+    "ApplicableVersion": "any",
+    "DalamudApiLevel": 15,
+    "Tags": [
+      "fate",
+      "automation",
+      "experimental"
+    ],
+    "IsHide": false,
+    "IsTestingExclusive": false,
+    "AcceptsFeedback": false,
+    "DownloadLinkInstall": "https://github.com/danil-mokoena/FatePilot/releases/download/v0.1.0/FatePilot-0.1.0-plugin.zip",
+    "DownloadLinkUpdate": "https://github.com/danil-mokoena/FatePilot/releases/download/v0.1.0/FatePilot-0.1.0-plugin.zip",
+    "DownloadLinkTesting": "https://github.com/danil-mokoena/FatePilot/releases/download/v0.1.0/FatePilot-0.1.0-plugin.zip",
+    "LastUpdate": 1793843589
+  }
+]
