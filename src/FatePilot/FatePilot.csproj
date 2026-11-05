@@ -1,0 +1,18 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Author>Mokoena</Author>
+    <Name>FatePilot</Name>
+    <Punchline>Trace sua rota. Encontre seu destino.</Punchline>
+    <Description>Projeto independente: FATEs de combate, rota de zonas e instâncias, retorno por meta e diagnóstico. /fatepilot</Description>
+    <Tags>fate;automation</Tags>
+    <AcceptsFeedback>false</AcceptsFeedback>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../FatePilot.Core/FatePilot.Core.csproj" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Localization/*.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Assets/logo.png" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Assets/cat.png" /></ItemGroup>
+</Project>

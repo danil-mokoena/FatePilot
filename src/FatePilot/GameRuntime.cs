@@ -1,0 +1,226 @@
+using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.Game.ClientState.Objects.Types;
+using FatePilot.Core;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using Lumina.Excel.Sheets;
+using System.Numerics;
+using NativeObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
+using World = FatePilot.Core.World;
+using Action = System.Action;
+
+namespace FatePilot;
+
+internal sealed class GameRuntime : IRuntime, IDisposable
+{
+    private readonly Navigation nav = new();
+    private readonly Combat combat;
+    private readonly Travel travel;
+    private bool session, ownsTravelService;
+    private ulong previousTarget, ownedTarget;
+    private readonly Queue<string> messages = new();
+    public string[] Messages => messages.ToArray();
+    public bool NeedsRecovery => combat.NeedsRecovery;
+    public GameRuntime() { combat = new(Log); travel = new(Log); }
+    public long ReservedGil => travel.ReservedGil;
+    public int UsedTickets => travel.UsedTickets;
+    public int TicketCount => travel.Tickets;
+
+    public void Log(string message)
+    {
+        messages.Enqueue($"{DateTime.Now:HH:mm:ss}  {message}");
+        while (messages.Count > 120) messages.Dequeue();
+    }
+
+    public List<(string Name, bool Available)> Dependencies()
+    {
+        var pi = Services.Plugin;
+        return [
+            (L.T("módulo de navegação: navegação cancelável"), pi.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>(IntegrationIds.NavigationNavPathfindCancelable).HasFunction
+                && pi.GetIpcSubscriber<List<Vector3>, bool, object>(IntegrationIds.NavigationPathMoveTo).HasAction
+                && pi.GetIpcSubscriber<object>(IntegrationIds.NavigationPathStop).HasAction
+                && pi.GetIpcSubscriber<bool>(IntegrationIds.NavigationNavIsReady).HasFunction
+                && pi.GetIpcSubscriber<bool>(IntegrationIds.NavigationPathIsRunning).HasFunction
+                && pi.GetIpcSubscriber<Vector3,float,float,Vector3?>(IntegrationIds.NavigationQueryMeshNearestPointReachable).HasFunction),
+            (L.T("módulo de posicionamento: presets atuais + configuração"), pi.GetIpcSubscriber<List<string>>(IntegrationIds.PositioningPresetsGetActiveList).HasFunction
+                && pi.GetIpcSubscriber<List<string>, bool>(IntegrationIds.PositioningPresetsSetActiveList).HasFunction
+                && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningPresetsSetForceDisabled).HasFunction
+                && pi.GetIpcSubscriber<IReadOnlyList<string>, bool, List<string>>(IntegrationIds.PositioningConfiguration).HasFunction
+                && pi.GetIpcSubscriber<string, bool, bool>(IntegrationIds.PositioningPresetsCreate).HasFunction
+                && pi.GetIpcSubscriber<string, string?>(IntegrationIds.PositioningPresetsGet).HasFunction
+                && pi.GetIpcSubscriber<string, bool>(IntegrationIds.PositioningPresetsDelete).HasFunction
+                && pi.GetIpcSubscriber<Vector3,float,bool,bool>(IntegrationIds.PositioningObstacleMapGenerate).HasFunction
+                && pi.GetIpcSubscriber<object>(IntegrationIds.PositioningObstacleMapGetGenerationStatus).HasFunction
+                && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningObstacleMapHasTempMap).HasFunction
+                && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningObstacleMapClearTempMap).HasFunction),
+            (L.T("módulo de habilidades: controle temporário"), pi.GetIpcSubscriber<string,string,string?,Guid?>(IntegrationIds.AbilitiesRegisterForLeaseWithCallback).HasFunction
+                && pi.GetIpcSubscriber<Guid,bool,object>(IntegrationIds.AbilitiesSetAutoRotationState).HasFunction
+                && pi.GetIpcSubscriber<Guid,object>(IntegrationIds.AbilitiesSetCurrentJobAutoRotationReady).HasFunction
+                && pi.GetIpcSubscriber<Guid,object,object,object>(IntegrationIds.AbilitiesSetAutoRotationConfigState).HasFunction
+                && pi.GetIpcSubscriber<Guid,object>(IntegrationIds.AbilitiesReleaseControl).HasAction),
+            (L.T("módulo de viagens: zonas + instâncias"), pi.GetIpcSubscriber<uint,byte,bool>(IntegrationIds.TravelTeleport).HasFunction
+                && pi.GetIpcSubscriber<bool>(IntegrationIds.TravelIsBusy).HasFunction
+                && pi.GetIpcSubscriber<object>(IntegrationIds.TravelAbort).HasAction
+                && pi.GetIpcSubscriber<int,object>(IntegrationIds.TravelChangeInstance).HasAction
+                && pi.GetIpcSubscriber<int>(IntegrationIds.TravelGetCurrentInstance).HasFunction
+                && pi.GetIpcSubscriber<int>(IntegrationIds.TravelGetNumberOfInstances).HasFunction
+                && pi.GetIpcSubscriber<bool>(IntegrationIds.TravelCanChangeInstance).HasFunction)
+        ];
+    }
+
+    public void Begin(RunOptions options)
+    {
+        var missing = Dependencies().Where(x => !x.Available).Select(x => x.Name).ToList();
+        if (missing.Count > 0) throw new InvalidOperationException(L.T("API indisponível: ") + string.Join(", ", missing));
+        if (Services.Plugin.InstalledPlugins.Count(p => p.IsLoaded && p.InternalName is IntegrationIds.PositioningPlugin or IntegrationIds.ConflictingPositioningPlugin) != 1
+            || !Services.Plugin.InstalledPlugins.Any(p => p.IsLoaded && p.InternalName == IntegrationIds.PositioningPlugin))
+            throw new InvalidOperationException(L.T("Carregue somente o módulo de posicionamento compatível. Versões alternativas podem disputar a mesma interface."));
+        if (Services.Plugin.GetIpcSubscriber<bool>(IntegrationIds.TravelIsBusy).InvokeFunc()
+            || Services.Plugin.GetIpcSubscriber<bool>(IntegrationIds.NavigationPathIsRunning).InvokeFunc())
+            throw new InvalidOperationException(L.T("Há navegação/viagem em andamento. Pare a outra automação antes de iniciar."));
+        var unlocked = Destinations();
+        foreach (var destination in options.Route.Concat(options.ReturnDestination is { } ret ? new[] { ret } : []))
+            if (!unlocked.Any(d => d.AetheryteId == destination.AetheryteId && d.TerritoryId == destination.TerritoryId))
+                throw new InvalidOperationException(L.T("Aetheryte indisponível para este personagem: ") + destination.Name);
+        previousTarget = Services.Targets.Target?.GameObjectId ?? 0;
+        ownedTarget = 0;
+        session = true;
+        combat.Begin();
+        travel.Begin(options);
+    }
+
+    public void End()
+    {
+        List<string> errors = [];
+        void Attempt(Action action) { try { action(); } catch (Exception ex) { errors.Add(ex.Message); } }
+        Attempt(nav.Stop);
+        Attempt(combat.End);
+        Attempt(travel.End);
+        if (ownsTravelService)
+        {
+            Attempt(() => Services.Plugin.GetIpcSubscriber<object>(IntegrationIds.TravelAbort).InvokeAction());
+            ownsTravelService = false;
+        }
+        if (ownedTarget != 0 && Services.Targets.Target?.GameObjectId == ownedTarget)
+            Services.Targets.Target = Services.Objects.FirstOrDefault(x => x.GameObjectId == previousTarget);
+        ownedTarget = previousTarget = 0;
+        session = false;
+        if (errors.Count > 0) throw new InvalidOperationException(string.Join(" | ", errors));
+    }
+
+    public void ValidateControl()
+    {
+        combat.CleanupMap();
+        if (session) combat.HealthCheck();
+    }
+
+    public void Update(World world)
+    {
+        if (session && world.LoggedIn && !world.Dead && !world.Restricted && !world.Loading && !world.Occupied)
+            nav.Update();
+    }
+
+    public unsafe World ReadWorld()
+    {
+        var pi = Services.Plugin;
+        var c = Services.Conditions;
+        var loading = c[ConditionFlag.BetweenAreas] || c[ConditionFlag.BetweenAreas51];
+        var player = Services.Objects.LocalPlayer;
+        if (player == null) return new World { Loading = loading };
+        var fateManager = FateManager.Instance();
+        var currentFate = fateManager == null ? (ushort)0 : fateManager->GetCurrentFateId();
+        var territory = Services.Client.TerritoryType;
+        var zone = Services.Data.GetExcelSheet<TerritoryType>().GetRowOrDefault(territory);
+        var flightSet = zone?.AetherCurrentCompFlgSet.RowId ?? 0;
+        var state = PlayerState.Instance();
+        var canFly = flightSet != 0 && state != null && state->IsAetherCurrentZoneComplete(flightSet);
+        var fates = new List<FateInfo>();
+        var enemies = new List<EnemyInfo>();
+        Vector3? nearestHub = null;
+        if (!loading)
+        {
+            foreach (var f in Services.Fates)
+            {
+                if (f.Address == 0 || f.FateId == 0) continue;
+                var native = (FateContext*)f.Address;
+                fates.Add(new(f.FateId, f.Name.TextValue, f.TerritoryType.RowId, (EventState)(byte)f.State,
+                    f.Level, f.MaxLevel, f.Progress, f.TimeRemaining, f.Position, f.Radius,
+                    native->Rule is 1 or 2, f.HasBonus, f.StartTimeEpoch));
+            }
+            foreach (var obj in Services.Objects)
+            {
+                if (obj.ObjectKind == ObjectKind.Aetheryte && obj.IsTargetable
+                    && (nearestHub == null || Vector3.Distance(player.Position, obj.Position) < Vector3.Distance(player.Position, nearestHub.Value)))
+                    nearestHub = obj.Position;
+                if (obj is IBattleNpc npc && npc.IsTargetable && !npc.IsDead && npc.StatusFlags.HasFlag(StatusFlags.Hostile))
+                {
+                    var fateId = ((NativeObject*)npc.Address)->FateId;
+                    enemies.Add(new(npc.GameObjectId, fateId, npc.Position, npc.HitboxRadius, npc.TargetObjectId == player.GameObjectId));
+                }
+            }
+        }
+        T Optional<T>(string gate, T fallback) => pi.GetIpcSubscriber<T>(gate).HasFunction ? pi.GetIpcSubscriber<T>(gate).InvokeFunc() : fallback;
+        return new World
+        {
+            LoggedIn = Services.Client.IsLoggedIn, Loading = loading, Dead = player.IsDead,
+            Restricted = Services.Client.IsPvP || c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95],
+            Occupied = c[ConditionFlag.Occupied] || c[ConditionFlag.OccupiedInQuestEvent] || c[ConditionFlag.OccupiedInEvent]
+                || c[ConditionFlag.OccupiedInCutSceneEvent] || c[ConditionFlag.WatchingCutscene] || c[ConditionFlag.OccupiedSummoningBell],
+            Casting = player.IsCasting || c[ConditionFlag.MountOrOrnamentTransition],
+            InCombat = c[ConditionFlag.InCombat], Mounted = c[ConditionFlag.Mounted], Flying = c[ConditionFlag.InFlight],
+            CanFly = canFly, Synced = fateManager != null && fateManager->SyncedFateId != 0 && fateManager->SyncedFateId == currentFate,
+            CurrentFate = currentFate, Level = player.Level, Job = player.ClassJob.RowId, Territory = territory,
+            Instance = Optional(IntegrationIds.TravelGetCurrentInstance, 0), InstanceCount = Optional(IntegrationIds.TravelGetNumberOfInstances, 0),
+            CanChangeInstance = Optional(IntegrationIds.TravelCanChangeInstance, false), TravelBusy = Optional(IntegrationIds.TravelIsBusy, false),
+            NavReady = Optional(IntegrationIds.NavigationNavIsReady, false), NavBusy = session && nav.Busy, NavError = nav.Error,
+            Position = player.Position, NearbyAetheryte = nearestHub, Fates = fates, Enemies = enemies,
+        };
+    }
+
+    public List<Destination> Destinations()
+    {
+        if (Services.Objects.LocalPlayer == null) return [];
+        var sheet = Services.Data.GetExcelSheet<Aetheryte>();
+        return Services.Aetherytes.Select(a => sheet.GetRowOrDefault(a.AetheryteId)).Where(a => a.HasValue && a.Value.IsAetheryte)
+            .Select(a => new Destination(a!.Value.Territory.RowId, a.Value.RowId,
+                L.T("{0} — {1}", a.Value.Territory.Value.PlaceName.Value.Name.ExtractText(), a.Value.PlaceName.Value.Name.ExtractText())))
+            .DistinctBy(d => d.AetheryteId).OrderBy(d => d.Name).ToList();
+    }
+
+    public void Move(Vector3 position, bool fly) => nav.Move(position, fly);
+    public void StopMovement() => nav.Stop();
+    public unsafe void Mount() => ActionManager.Instance()->UseAction(ActionType.GeneralAction, 9);
+    public unsafe void Dismount() => ActionManager.Instance()->UseAction(ActionType.GeneralAction, 23);
+    public unsafe void Sync()
+    {
+        var manager = FateManager.Instance();
+        if (manager != null && manager->GetCurrentFateId() != 0) manager->LevelSync();
+    }
+    public void SetCombat(bool enabled) => combat.SetEnabled(enabled);
+    public void Target(ulong id)
+    {
+        var target = Services.Objects.FirstOrDefault(x => x.GameObjectId == id);
+        if (target == null) return;
+        ownedTarget = id;
+        Services.Targets.Target = target;
+    }
+    public void Teleport(Destination destination)
+    {
+        travel.Teleport(destination);
+    }
+    public void ConfirmTeleport() => travel.ConfirmArrival();
+    public void ChangeInstance(int instance)
+    {
+        ownsTravelService = true;
+        Services.Plugin.GetIpcSubscriber<int, object>(IntegrationIds.TravelChangeInstance).InvokeAction(instance);
+    }
+    public void AcknowledgeTravelComplete() => ownsTravelService = false;
+    public void Recover() => combat.Recover();
+    public void Dispose()
+    {
+        try { End(); }
+        finally { combat.Dispose(); }
+    }
+}
