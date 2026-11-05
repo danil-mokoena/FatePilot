@@ -1,77 +1,146 @@
-# FatePilot 0.1
+<p align="center"><img src="src/FatePilot/Assets/logo.png" alt="FatePilot guiding star" width="140" /></p>
+<h1 align="center">FatePilot</h1>
+<p align="center"><strong>Chart your route. Find your destiny.</strong><br />By Mokoena</p>
+<p align="center"><a href="#installation">Installation</a> · <a href="#dependencies">Dependencies</a> · <a href="#features">Features</a> · <a href="SECURITY.md">Privacy &amp; security</a> · <a href="https://github.com/danil-mokoena/FatePilot/releases">Releases</a></p>
 
-**By Mokoena**
+FatePilot is an independent Dalamud plugin that coordinates combat FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-Trace sua rota. Encontre seu destino.
+**Status:** experimental 0.1 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
 
-Plugin independente em C# para Dalamud API 15. Interface própria em tons de ardósia e dourado, controles compactos, logo local e painel de sessão. Esta é uma **compilação experimental para testes**, ainda sem validação dentro do jogo.
+> [!WARNING]
+> **Use at your own risk.** Square Enix prohibits unauthorized third-party tools and automated or unattended play. Using this plugin may result in account suspension or a permanent ban. See the official [third-party tools statement](https://na.finalfantasyxiv.com/lodestone/topics/detail/68f4c4d3bdea34f732ee8db3425122b8b8d6ec3b) and [prohibited activities policy](https://support.na.square-enix.com/faqarticle.php?id=5382&kid=68216).
+>
+> FATE farming is associated with botting and RMT in [community discussions](https://www.reddit.com/r/ffxivdiscussion/comments/12ki4a0/fate_botting_in_endwalker_zones/). Claims that FATEs receive particular enforcement priority are community perceptions, not a confirmed official policy. FatePilot offers no protection against detection or account penalties. You are responsible for the decision to use it.
 
-## O que está implementado
+> [!IMPORTANT]
+> **This is a preview build, not a production-ready release.** It compiles cleanly and passes 40 local tests, including simulated session behavior and static privacy checks. Live combat, navigation, instance changes, ticket handling and UI rendering still require in-game validation. Publishing the build does not change that status.
 
-- Seleção de FATEs de combate já iniciados, com filtros de nível, progresso e tempo restante; preferência por bônus e lista de ignorados.
-- Deslocamento, montaria, voo onde desbloqueado e sincronização de nível.
-- Rota ordenada de zonas e rotação das instâncias conhecidas antes de seguir para a próxima zona.
-- Retorno à cidade após X sucessos observados. Meta zero mantém o ciclo até Parar.
-- Aetheryte Tickets: ligar/desligar, tarifa mínima e escolha explícita entre parar ou pagar gil quando acabarem.
-- Limite de gil por sessão, incluindo o retorno. Custos aceitos são reservados mesmo se o teleporte for cancelado depois.
-- Detecção de ausência de progresso, prazos máximos, interrupção em morte, desconexão, mudança de classe, entrada em duty/PvP e conflito de controle.
-- Diagnóstico local, recuperação de ajustes após interrupção e botão compacto de parada.
-- UI em inglês, japonês, alemão, francês, português **do Brasil** e espanhol. Auto acompanha o idioma oficial do cliente; PT-BR e ES são escolhas manuais salvas.
-- Sobre com logo, “By Mokoena” e botão “Buy my cat a treat”. O link só é aberto pelo clique.
+## Features
 
-FATEs de coleta, escolta e ativação por NPC não são selecionados nesta versão. A contagem usa participação em combate e conclusão observada, sem ler o pacote de recompensa: eventos que desaparecem sem confirmação não contam para a meta.
+| Area | Available in 0.1 |
+|---|---|
+| FATE selection | Active combat FATEs, level/progress/time filters, bonus preference and an ignore list |
+| Travel | Ordered zone routes, discovered instance rotation, mounts, unlocked flight and level sync |
+| Session goals | Return to a selected city after a chosen number of observed successful FATEs |
+| Teleport costs | Aetheryte Ticket switch, minimum fare, explicit gil fallback and a session gil budget |
+| Recovery | Stuck-route handling, operation timeouts, control conflict detection and restoration of previous settings |
+| Interface | Slate and gold design, compact Start/Stop controls, session statistics and local diagnostics |
 
-## Instalação pelo Dalamud
+The plugin does not start farming simply because it is loaded. Start a session explicitly from the panel or command.
 
-Em **Dalamud Settings → Experimental → Custom Plugin Repositories**, adicione e habilite:
+## Requirements
 
-```text
-https://raw.githubusercontent.com/danil-mokoena/FatePilot/main/pluginmaster.json
+- FFXIV on Windows with XIVLauncher and a working **Dalamud API 15** installation.
+- All four integrations in the [dependency table](#dependencies), installed and enabled separately.
+- A combat job supported and configured in the ability integration, with IPC control available.
+- Unlocked aetherytes for every selected route/return destination. A mount for mounted travel and unlocked flight for flying routes.
+- Available gil or Aetheryte Tickets according to the chosen payment settings.
+- For instance rotation: an instanced zone, Instance Switcher enabled and the available instances discovered at an aetheryte.
+
+You do **not** need the .NET SDK to install the compiled plugin. The SDK and PowerShell requirements below are for building from source.
+
+## Installation
+
+1. Install and enable the [required dependencies](#dependencies).
+2. Open **Dalamud Settings → Experimental → Custom Plugin Repositories**.
+3. Add the following URL, enable the entry and save:
+
+   ```text
+   https://raw.githubusercontent.com/danil-mokoena/FatePilot/main/pluginmaster.json
+   ```
+
+4. Open the plugin installer with `/xlplugins`, search for **FatePilot** and install it.
+5. Open the panel with `/fatepilot`.
+
+Use the URL above for installation. It points to the plugin catalog; the normal GitHub project page is for browsing the source and documentation. Future releases will use the same catalog URL.
+
+For local development, extract the plugin ZIP from [Releases](https://github.com/danil-mokoena/FatePilot/releases), keep the two DLLs, dependency JSON and manifest together, and add the full path to `FatePilot.dll` under **Dev Plugin Locations** instead. Do not load a development copy and the installed copy simultaneously.
+
+## Dependencies
+
+| Component | Role | Setup notes |
+|---|---|---|
+| [WrathCombo](https://github.com/PunishXIV/WrathCombo) | Combat abilities | IPC control must be available; FatePilot requests a temporary lease |
+| [BossMod](https://github.com/awgil/ffxiv_bossmod) | Positioning | Use the original compatible plugin; do not load conflicting variants together |
+| [vnavmesh](https://github.com/awgil/ffxiv_navmesh) | Pathfinding | The current zone's navigation mesh must be ready |
+| [Lifestream](https://github.com/NightmareXIV/Lifestream) | Instance switching | Enable Instance Switcher and open the aetheryte's instance menu once to discover the options |
+
+These integrations are installed separately. Their implementations are not bundled with FatePilot. The **Diagnostics** tab checks the required APIs before a session starts. See [integration details](INTEGRATIONS.md) for compatibility and restoration behavior.
+
+## First session
+
+Stop other combat, movement and travel automation first. In **Session**, choose a language, a return city and a FATE goal. In **Route**, add one aetheryte per zone in the order you want to visit. Review **Costs** before starting.
+
+For initial functional testing, select one familiar zone and a goal of one FATE, then observe the entire cycle. This helps validate behavior; it does not reduce or remove the account-policy risk. Follow the [validation checklist](VALIDATION.md) before relying on additional features.
+
+### Tickets and gil
+
+Enable **Use Aetheryte Tickets** to request ticket payment for eligible paid teleports. Free destinations do not consume tickets. A minimum fare lets smaller trips use gil, and the fallback to gil when tickets run out is an explicit separate choice. The budget also applies to the return trip.
+
+Open the game's Teleport window once before the first ticket test. FatePilot uses separate native entry points for ordinary and ticket teleports rather than accepting arbitrary Yes/No dialogs. Actual confirmation and consumption behavior still needs testing with your client settings. An inconsistency stops the session, but cannot undo a charge already made by the game.
+
+### Stopping
+
+Use **Stop** or `/fatepilot stop`. FatePilot cancels its pending paths, releases its ability lease and restores the previous positioning setup. It attempts to cancel its own Teleport while it is still being cast; an area transition already accepted by the game may finish afterward.
+
+If a previous session left a recovery record, use **Restore previous session** while stopped. Death, logout, a job change, duty/PvP entry, unexpected travel and control conflicts also interrupt the session.
+
+## Languages
+
+English · 日本語 · Deutsch · Français · **Português (Brasil)** · Español
+
+**Auto** follows the official game-client language. Brazilian Portuguese and Spanish can be selected manually and are remembered. FATE and zone names continue to follow the game client's language. All UI catalogs are included locally; native-speaker review is still welcome.
+
+## Commands
+
+| Command | Action |
+|---|---|
+| `/fatepilot` | Open the panel |
+| `/fatepilot start` | Start with the saved settings |
+| `/fatepilot stop` | Stop and restore previous settings |
+| `/fatepilot status` | Print the current state to local chat |
+| `/fatepilot recover` | Restore a previous session's local recovery record while stopped |
+
+## Scope and limitations
+
+Only already-active combat FATEs are selected. Collection, escort and NPC-triggered events are outside the current scope. Completion means an observed successful end after participation; a disappearing FATE without confirmation does not count toward the return goal.
+
+Profiles, persistent history, job queues, repairs, consumables, voucher purchases, party coordination and time/inventory/equipment stop conditions are not implemented in 0.1. There are no GM detection or concealment features.
+
+### Next milestones
+
+After validating the 0.1 combat/travel/stop cycle, the next planned FATE types are **collection** and **escort**. These need dedicated NPC interaction, item hand-in and objective-following behavior rather than simply enabling another filter. They are planned work, not features included in the current download.
+
+## Privacy and security
+
+FatePilot has no telemetry service, account system or automatic data-upload client. Settings and recovery data are local; the most recent 120 diagnostic events stay in memory. The logo, cat portrait and language catalogs are bundled. Diagnostic copying and the Ko-fi link require an explicit click.
+
+Dependencies have their own behavior and may make network requests, including requests triggered through their APIs. The security review covers FatePilot's own code and compiled assemblies; it is not an audit of the entire game process. Read the [security review and data inventory](SECURITY.md).
+
+## Building and contributing
+
+Requires **.NET SDK 10**, **PowerShell 7** and local **Dalamud API 15** development references.
+
+```powershell
+./build.ps1
+# Or select a specific SDK executable:
+./build.ps1 -Dotnet 'C:/path/to/dotnet.exe'
 ```
 
-Salve, abra `/xlplugins`, procure **FatePilot** e instale. Confira antes as [integrações necessárias](INTEGRATIONS.md). O catálogo é público e aponta para o pacote na Release do GitHub. A 0.1 é experimental; publicação não significa validação em execução. O mesmo endereço do catálogo será usado para as próximas atualizações.
+The script builds Release, runs the tests, inspects the assemblies and produces plugin/source ZIPs plus SHA-256 hashes in `artifacts/`. The SDK and packager are pinned to 15.0.0. Build-time package restoration may access package servers.
 
-## Instalação local para desenvolvimento
+`src/FatePilot.Core` contains the game-independent session controller. `src/FatePilot` contains the UI and adapters. `tests/FatePilot.Tests` contains the behavioral and privacy checks. Exact external API names are centralized in `IntegrationIds.cs`.
 
-1. Extraia `FatePilot-0.1.0-plugin.zip` em uma pasta permanente. Mantenha `FatePilot.dll`, `FatePilot.Core.dll`, `FatePilot.deps.json` e `FatePilot.json` juntos.
-2. Confira as integrações em [INTEGRATIONS.md](INTEGRATIONS.md). Os componentes já instalados no jogo são usados por suas APIs locais; suas DLLs não estão neste pacote.
-3. Nas configurações do Dalamud (`/xlsettings`), abra a área de desenvolvimento/Experimental e adicione o caminho completo de `FatePilot.dll` em **Dev Plugin Locations**. Os rótulos podem variar conforme a versão do host.
-4. Na lista de plugins (`/xlplugins`), carregue o plugin de desenvolvimento FatePilot. Se necessário, atualize a lista após adicionar o caminho.
-5. Abra `/fatepilot`. Na aba de sessão, escolha o idioma e a cidade de retorno. Na rota, escolha um aetheryte por zona. Em diagnóstico, verifique os quatro módulos.
-6. Pare as outras automações antes de iniciar. Para a primeira validação, use uma zona conhecida e meta de um FATE. Acompanhe a sessão.
+To prepare release metadata, run `./prepare-repository.ps1 -ReleaseDirectory './artifacts'`. It verifies the DLL/manifest version before writing `pluginmaster.json`; it does not publish anything itself. Publish the release ZIP before updating the public catalog.
 
-O pacote não ativa uma sessão de farming ao carregar. A DLL deve permanecer com a mesma versão de API do Dalamud usada na compilação.
+For bug reports, include versions, reproduction steps and expected/observed behavior. Review diagnostics before sharing them; character and account names are not required. Translation corrections are welcome.
 
-## Tickets e instâncias
+## Support
 
-Abra a janela de Teleport uma vez antes do primeiro teste com tickets. O plugin usa as funções nativas de Teleport e de ticket separadamente; não aceita diálogos genéricos de Sim/Não. O fluxo exato de confirmação e consumo precisa ser validado com as suas opções de Teleport. Ao chegar, ele verifica o consumo; inconsistência interrompe a sessão. Essa verificação não desfaz um pagamento que o cliente já tenha feito.
+<p><a href="https://ko-fi.com/mokoena"><img src="src/FatePilot/Assets/cat.png" alt="Mokoena's cat" width="88" /></a></p>
 
-Para as instâncias, abra uma vez o menu de troca no aetheryte para que o módulo de viagens descubra as opções e habilite o recurso indicado em [INTEGRATIONS.md](INTEGRATIONS.md). Sem informação confirmada, o FatePilot não inventa um número de instâncias.
+**[Buy my cat a treat](https://ko-fi.com/mokoena)** — optional support for the project and a very important snack budget.
 
-`/fatepilot stop` encerra a sessão, cancela as rotas do plugin, libera o controle temporário e tenta cancelar o seu Teleport se ele ainda estiver sendo conjurado. Uma transição já aceita pelo jogo pode terminar depois da parada.
+---
 
-## Comandos
-
-| Comando | Ação |
-|---|---|
-| `/fatepilot` | Abrir o painel |
-| `/fatepilot start` | Iniciar com as opções salvas |
-| `/fatepilot stop` | Parar e restaurar os ajustes anteriores |
-| `/fatepilot status` | Mostrar estado no chat local |
-| `/fatepilot recover` | Restaurar o registro local da sessão anterior, quando parado |
-
-## Validação e próximos passos
-
-Compilação Release e 40 testes locais aprovados. Os testes cobrem seleção, interrupções, rotação de zonas/instâncias simulada, contagem de sucesso, orçamento, tickets, traduções e inspeção de capacidades das DLLs. Não substituem o teste das APIs nativas em execução. Traduções completas, ainda sem revisão por falantes nativos de todos os idiomas.
-
-O roteiro de teste dentro do jogo está em [VALIDATION.md](VALIDATION.md). Segurança e armazenamento estão descritos em [SECURITY.md](SECURITY.md).
-
-Perfis, histórico persistente, fila de classes, reparo, consumíveis, compras de vouchers, modo de grupo e paradas por tempo/inventário/equipamento **não foram implementados nesta 0.1**. Não há recursos de detecção de GM ou tentativa de disfarçar a automação.
-
-## Compilar
-
-Requer .NET SDK 10 e referências locais do Dalamud API 15. Execute `./build.ps1` no PowerShell; para um SDK fora do PATH, use `./build.ps1 -Dotnet 'C:/caminho/dotnet.exe'`. O script compila, executa os testes, monta os pacotes e gera SHA-256. O SDK oficial e o empacotador estão fixados na versão 15.0.0. A restauração de ferramentas pode acessar os serviços de pacotes durante a compilação; isso não ocorre no código de execução do plugin.
-
-`src/FatePilot.Core` contém a lógica independente do jogo; `src/FatePilot` contém UI e adaptadores; `tests` contém testes e verificações de privacidade. `IntegrationIds.cs` reúne os nomes exatos dos contratos externos necessários à interoperabilidade.
-
-Para preparar o catálogo de uma Release, execute `./prepare-repository.ps1 -ReleaseDirectory './artifacts'`. O script verifica a versão da DLL e do manifesto antes de escrever `pluginmaster.json`. Publique primeiro o ZIP da Release e depois a atualização do catálogo. O script não acessa sua conta nem publica arquivos sozinho.
+FatePilot is an independent project by Mokoena. It is not affiliated with or endorsed by Square Enix or the Dalamud team. FINAL FANTASY XIV belongs to Square Enix.

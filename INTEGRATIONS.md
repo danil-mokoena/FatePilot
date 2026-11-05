@@ -1,22 +1,22 @@
-# Integrações técnicas
+# Integrations
 
-Este arquivo identifica os componentes necessários para instalar e depurar o plugin. Os nomes são contratos de interoperabilidade; não são créditos de origem nem marcas exibidas pela UI.
+FatePilot uses separately installed components through local IPC contracts. Their names identify technical dependencies, not the origin of FatePilot's implementation or visual identity.
 
-| Papel no FatePilot | Componente | Interface utilizada |
+| Role | Component | Interfaces used |
 |---|---|---|
-| Habilidades | WrathCombo | Lease temporário, configuração e ativação de habilidades; liberação ao encerrar |
-| Posicionamento | BossMod original | Configuração, presets de movimento e mapa temporário de obstáculos |
-| Navegação | vnavmesh | PathfindCancelable, MoveTo, Stop e consulta de ponto navegável |
-| Instâncias | Lifestream | ChangeInstance, IsBusy, Abort, CanChangeInstance e descoberta de instâncias |
+| Combat abilities | [WrathCombo](https://github.com/PunishXIV/WrathCombo) | Temporary lease, job preparation, configuration, activation and release |
+| Positioning | [BossMod](https://github.com/awgil/ffxiv_bossmod) | Configuration, movement presets and temporary obstacle maps |
+| Navigation | [vnavmesh](https://github.com/awgil/ffxiv_navmesh) | Cancelable pathfinding, MoveTo, Stop and reachable-point queries |
+| Instance switching | [Lifestream](https://github.com/NightmareXIV/Lifestream) | ChangeInstance, IsBusy, Abort, CanChangeInstance and instance discovery |
 
-As referências locais consultadas incluíam BossMod 7.5.7.20, WrathCombo 1.0.4.27 e vnavmesh 1.2.3.14. Não equivale a certificação de compatibilidade em execução. A aba Diagnóstico verifica a presença das APIs antes de iniciar. Atualizações que alterem contratos podem exigir recompilar o adaptador.
+Reference installations reviewed during development included BossMod 7.5.7.20, WrathCombo 1.0.4.27 and vnavmesh 1.2.3.14. This is not live compatibility certification. Diagnostics checks the required API availability before starting; upstream contract changes can require adapter updates.
 
-No módulo de viagens, habilite **Instance Switcher** e abra o menu de troca no aetheryte para descobrir as instâncias. O teleporte entre zonas e o consumo de tickets são solicitados diretamente pelas funções do cliente, via FFXIVClientStructs.
+Enable **Instance Switcher** in the travel component, and open the aetheryte's instance menu once so it can discover available instances. Zone teleports and Aetheryte Tickets are requested through native client functions exposed by FFXIVClientStructs.
 
-Não carregue simultaneamente variantes do módulo de posicionamento que registrem os mesmos canais de IPC. O FatePilot rejeita esse cenário para evitar controlar o componente errado. As outras automações de combate, navegação e viagem devem estar paradas.
+Do not load multiple positioning variants that register the same IPC channels. FatePilot rejects that setup to avoid controlling the wrong component. Stop other combat, navigation and travel automation before starting.
 
-O plugin cria um preset temporário que contém apenas módulos de movimento, salva o estado anterior e desativa o controle de seguimento durante a sessão. As habilidades ficam sob um lease separado. Ao encerrar, ele libera esse lease, restaura o estado anterior e remove seu preset. Se outro componente alterar o controle durante a sessão, ele para. Presets alterados externamente são preservados na restauração normal.
+For positioning, FatePilot creates a temporary movement-only preset, records the previous state and disables follow control for the session. Ability execution uses a separate lease. Ending the session releases that lease, restores prior settings and removes the temporary preset. External control changes interrupt the session; presets changed externally are preserved during normal restoration. A local recovery record supports restoration after interruption.
 
-Esses componentes continuam sendo programas independentes. Por exemplo, o módulo de habilidades consulta remotamente o estado de sua interface, e o de navegação pode baixar dados de navegação. A ausência de um cliente HTTP no FatePilot não transforma todas as dependências em software offline. Este pacote não altera essas dependências.
+These are independent programs with their own behavior and permissions. For example, the ability component consults a remote IPC status resource, and navigation can download navigation data. Requests may be triggered through their APIs. FatePilot's lack of its own HTTP client does not make the whole setup offline.
 
-Não são distribuídas implementações, DLLs ou recursos dessas integrações; elas permanecem sob suas licenças e instalações próprias.
+Dependency implementations, DLLs and resources are not bundled in this project. Their licenses and installations remain separate. Exact wire identifiers are centralized in `src/FatePilot/IntegrationIds.cs` and must retain their original spelling for compatibility.

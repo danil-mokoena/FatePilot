@@ -1,55 +1,57 @@
-# Revisão de segurança — FatePilot 0.1
+# Security review — FatePilot 0.1
 
-Data: 4 de novembro de 2026. Escopo: código deste projeto e DLLs produzidas pela compilação Release. Revisão manual, testes do controlador simulado e inspeção dos metadados das DLLs. Não foi feito teste dinâmico dentro do jogo nem captura de tráfego do processo completo.
+Reviewed November 4, 2026. Scope: this project's source and Release assemblies. Methods: manual review, simulated controller tests and assembly metadata inspection. No live game test or process-wide network capture has been performed.
 
-## Resultado verificável
+## Findings
 
-Não foram identificados no código próprio clientes HTTP, sockets, webhooks, serviços de telemetria, leitura de nomes de jogadores, Content IDs, contas, credenciais ou chat. As DLLs próprias não referenciam tipos de rede, criação de processos, carregamento dinâmico de assemblies ou P/Invoke declarado pelo projeto. Os acessos nativos necessários ao jogo passam pelas estruturas fornecidas pelo host.
+No HTTP client, socket, webhook, telemetry service, player-name collection, account identifier collection, credential access or chat collection was identified in FatePilot's runtime code. Its own assemblies do not reference network types, process creation, dynamic assembly loading or project-declared P/Invoke methods. Necessary native game access uses structures supplied by the host.
 
-O único endereço web no código de execução é `https://ko-fi.com/mokoena`. Ele é entregue ao navegador pelo utilitário do Dalamud **somente após clicar em “Buy my cat a treat”**. Não é aberto no carregamento do plugin, nem contém parâmetros de personagem, mundo, sessão ou rastreamento adicionados pelo FatePilot. A visita ao site tem o comportamento normal do navegador e do próprio Ko-fi.
+The only web address in runtime code is `https://ko-fi.com/mokoena`. Dalamud's browser utility opens it only after the user clicks **Buy my cat a treat**. FatePilot adds no character, world, session or tracking parameters. The resulting site visit follows the browser's and Ko-fi's normal behavior.
 
-O logo, o retrato do gato e os seis catálogos de idioma estão incorporados na DLL; não são baixados pela interface. O manifesto desabilita a opção de feedback do empacotador. Não há servidor próprio, autenticação, atualização própria, anúncios ou código remoto.
+The logo, cat portrait and six language catalogs are embedded locally. The plugin manifest disables the packager's feedback option. There is no proprietary account, server, updater, advertising system or remotely loaded code. Installation and updates through the custom repository are handled by Dalamud and require downloads from GitHub.
 
-## Dados e armazenamento
+## Data inventory
 
-| Informação | Uso | Destino |
+| Information | Purpose | Storage or destination |
 |---|---|---|
-| Idioma, filtros, rota, cidade, tickets e orçamento | Preferências | Configuração local gerenciada pelo Dalamud |
-| Estado anterior de posicionamento e nomes de presets | Restauração | `session-recovery.json`, na pasta de configuração do plugin; removido após restauração bem-sucedida |
-| Estado, posição, classe e nível do próprio personagem | Navegação e controle | Memória durante a leitura; não exportados |
-| FATEs, inimigos NPC e aetherytes | Seleção de objetivos e trajeto | Memória; sem registro de jogadores próximos |
-| Contadores de tickets/gil e alvo anterior | Controle da sessão e restauração | Memória |
-| Últimos 120 eventos da sessão | Diagnóstico | Fila em memória; não gravada em histórico pelo plugin |
-| Falha de atualização/restauração | Aviso técnico | Log do host com mensagem genérica, sem payload de jogador |
-| Diagnóstico copiado | Ação manual do usuário | Área de transferência, apenas pelo botão “Copiar diagnóstico” |
+| Language, route, filters, return city, ticket and budget options | Preferences | Local configuration managed by Dalamud |
+| Previous positioning state and preset names | Restoration | `session-recovery.json` in the plugin configuration folder; removed after successful restoration |
+| Own character's state, position, job and level | Session control | Transient memory; not exported |
+| FATEs, hostile NPCs and aetherytes | Target and route selection | Memory; no nearby-player history |
+| Ticket/gil counters and previous target identifier | Session and restoration | Memory |
+| Most recent 120 session events | Diagnostics | Bounded in-memory queue, not a persistent plugin history |
+| Update or restoration failure | Technical notice | Generic host-log message without a player payload |
+| Copied diagnostics | Explicit user action | Clipboard only when **Copy diagnostics** is clicked |
 
-O registro de recuperação contém rótulos de presets definidos pelo usuário. Não se deve tratá-lo como arquivo anônimo se o próprio usuário colocou dados pessoais nesses rótulos. Não há envio desse arquivo. A enumeração da tabela de objetos filtra NPCs e aetherytes e não lê nomes de outros personagens. O alvo anterior é mantido apenas como identificador transitório para restaurá-lo.
+Preset labels are user-defined: a recovery file can contain personal text if the user put it in those labels. FatePilot does not upload the file. Object-table enumeration filters NPCs and aetherytes and does not read other characters' names. The previous target is retained only as a transient identifier for restoration.
 
-Com a UI fechada e nenhuma sessão em execução, não são feitas as leituras periódicas de mundo para o painel. Uma limpeza de recurso temporário ainda pode ser concluída.
+When the panel is closed and no session is running, periodic world reads for the panel are skipped. Pending temporary-resource cleanup can still finish.
 
-## Proteções aplicadas
+## Applied protections
 
-- Chamadas de API com identificadores fixos; nenhum comando de chat arbitrário é montado a partir de nomes ou configurações.
-- Link externo fixo e iniciado por clique; sem URL de imagem remota.
-- Controle de habilidades por lease, com desativação e liberação ao encerrar. Preset de posicionamento temporário, limitado a movimento e validado após criação.
-- Detecção de alteração externa de controle; interrupção da sessão em conflito.
-- Cancelamento da tarefa de cálculo de rota e descarte do resultado tardio após Parar.
-- Restauração do estado anterior, inclusive o estado de desativação forçada; preservação de presets alterados externamente.
-- Registro de recuperação limitado a 64 KiB e estrutura validada antes da restauração.
-- Cancelamento apenas da conjuração de Teleport iniciada por esta sessão. Sem confirmação genérica de caixas de diálogo.
-- Orçamento verificado antes da solicitação de viagem e conferência de consumo de tickets na chegada.
-- Prazos para deslocamento, teleporte, troca de instância, sincronização e combate. Ausência de progresso exclui temporariamente o FATE.
-- Interrupções em morte, desconexão, duty/PvP, mudança de classe ou zona inesperada e interação não prevista.
-- Testes de regressão bloqueiam introdução de APIs sensíveis conhecidas, endpoints adicionais, leituras de identidade e ausência de recursos locais nas DLLs.
+- Fixed API contracts; no arbitrary chat command assembled from names or configuration.
+- Fixed external link opened by a click, with bundled UI images and translations.
+- Temporary ability lease, explicit deactivation and release on shutdown.
+- Movement-only preset verified after creation; external control conflicts stop the session.
+- Cancellation of pending pathfinding and rejection of late results after Stop.
+- Restoration of prior settings, including forced-disabled state, while preserving externally changed presets.
+- Recovery record restricted to 64 KiB with structural validation before restoration.
+- Cancellation only of the session's own Teleport cast; no generic Yes/No dialog acceptance.
+- Travel-budget checks before requesting a teleport; ticket consumption checked on arrival.
+- Deadlines for travel, instance changes, synchronization and combat; temporary FATE exclusion after lack of progress.
+- Stops on death, logout, job change, duty/PvP entry, unexpected travel or interaction.
+- Regression guards for known sensitive APIs, unexpected endpoints, identity access and missing embedded resources.
 
-## Limites da revisão
+## Review limits
 
-As verificações estáticas são barreiras de regressão, não um isolamento de permissões. O plugin funciona dentro do processo do jogo e usa APIs nativas: mudanças no cliente, no host ou nos contratos externos podem causar falhas. A suíte não executa os adaptadores em um cliente real.
+Static guards are regression checks, not a permissions sandbox or proof that every possible defect is absent. The plugin runs inside the game process and uses native APIs; client, host or dependency changes may cause failures. The test suite does not execute the adapters in a real client.
 
-As integrações descritas em [INTEGRATIONS.md](INTEGRATIONS.md) têm comportamentos e permissões próprios, inclusive consultas de rede. Algumas dessas consultas podem ser desencadeadas ao usar suas APIs. Não foi auditado integralmente todo o código dessas dependências nem o processo completo. A conclusão sobre ausência de telemetria própria se limita ao FatePilot entregue.
+The [integrations](INTEGRATIONS.md) have their own code and network behavior. Their entire implementations and the complete game process have not been audited. Some network requests can be triggered by using their APIs. Findings about FatePilot's own telemetry cannot be generalized to all installed software.
 
-O mecanismo nativo de ticket ainda requer validação com as opções reais de Teleport. A conferência na chegada detecta inconsistências, mas não desfaz consumo ocorrido. Durante uma mudança de área já confirmada pelo jogo, Parar não reverte a viagem.
+Native ticket behavior still needs validation with actual Teleport settings. Arrival checks detect inconsistencies but do not undo completed charges. Stop cannot reverse a zone transition already accepted by the game. Technical privacy measures do not protect an account from penalties for automation; see the warning in the [README](README.md).
 
-## Reproduzir
+## Reproduce and report
 
-Execute `./build.ps1` com .NET SDK 10 e Dalamud API 15. O resultado inclui compilação, 40 testes, inspeção de referências/métodos/recursos das duas DLLs e SHA-256 dos artefatos. `tests/FatePilot.Tests/PrivacyAudit.cs` contém os critérios automatizados. Revise também os adaptadores manualmente ao mudar qualquer API.
+Run `./build.ps1` with .NET SDK 10, PowerShell 7 and Dalamud API 15 references. It builds, runs 40 tests, inspects assembly references/methods/resources, packages the output and generates SHA-256 hashes. Automated criteria are in `tests/FatePilot.Tests/PrivacyAudit.cs`. Manually review adapter changes as well.
+
+For a security concern, provide a minimal reproduction and affected version. Do not include credentials, character/account identifiers or unreviewed private logs in public issues. The plugin does not upload support diagnostics automatically.
