@@ -1,5 +1,6 @@
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Game.ClientState.Conditions;
 using FatePilot.Core;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
@@ -12,10 +13,13 @@ using NativeObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 namespace FatePilot;
 
 // One short-lived interaction with an identified FATE object. No global dialogue skipper.
-internal sealed unsafe class EventInteraction
+internal sealed unsafe class EventInteraction(Action<string> log)
 {
     private ObjectiveActor? owned;
-    private long expires, lastAdvance;
+    private readonly InteractionLease lease = new();
+    private long lastAdvance;
+    private InteractionStatus lastStatus;
+    private static double Now => Environment.TickCount64 / 1000d;
 
     public static int ItemCount(uint id)
     {
@@ -24,9 +28,16 @@ internal sealed unsafe class EventInteraction
         return Math.Max(inventory->GetInventoryItemCount(id, false, false, false), inventory->GetItemCountInContainer(id, InventoryType.KeyItems));
     }
 
-    private static bool Matches(NativeObject* obj, ushort fate) => obj != null &&
-        (obj->FateId == fate || obj->EventId.Id == (0x801A0000u | fate) ||
-         (obj->EventHandler != null && obj->EventHandler->Info.EventId.Id == (0x801A0000u | fate)));
+    private static bool Matches(NativeObject* obj, FateContext* fate)
+    {
+        if (obj == null) return false;
+        var director = 0x801A0000u | fate->FateId;
+        var array = fate->ArrayEventHandler.Id;
+        var id = obj->EventId.Id;
+        var handler = obj->EventHandler == null ? 0 : obj->EventHandler->Info.EventId.Id;
+        return obj->FateId == fate->FateId || id == director || handler == director ||
+            (array != 0 && (id == array || handler == array));
+    }
 
     public static void SnapshotObjectives(FateContext* fate, List<ObjectiveActor> output)
     {
@@ -37,7 +48,7 @@ internal sealed unsafe class EventInteraction
             if (obj is IBattleNpc enemy && (enemy.IsDead || enemy.StatusFlags.HasFlag(StatusFlags.Hostile))) continue;
             var knownStarter = fate->MotivationNpc is not (0 or 0xE0000000) && obj.EntityId == fate->MotivationNpc;
             var knownRecipient = fate->ObjectiveNpc is not (0 or 0xE0000000) && obj.EntityId == fate->ObjectiveNpc;
-            var linked = Matches(native, fate->FateId);
+            var linked = Matches(native, fate);
             if (!knownStarter && !knownRecipient && !linked) continue;
             if (obj.IsTargetable && knownStarter && fate->State == FateState.Preparing)
                 output.Add(new(obj.GameObjectId, fate->FateId, ObjectiveRole.Starter, obj.Position, obj.HitboxRadius));
@@ -55,6 +66,7 @@ internal sealed unsafe class EventInteraction
 
     public void Begin(ObjectiveActor actor)
     {
+        if (lease.Active) return;
         var fate = Services.Fates.FirstOrDefault(f => f.FateId == actor.FateId);
         var obj = Services.Objects.FirstOrDefault(o => o.GameObjectId == actor.Id);
         var player = Services.Objects.LocalPlayer;
@@ -64,35 +76,68 @@ internal sealed unsafe class EventInteraction
         SnapshotObjectives((FateContext*)fate.Address, valid);
         if (!valid.Any(a => a.Id == actor.Id && a.Role == actor.Role)) return;
         // A pre-existing dialogue is never adopted as ours.
-        if (Visible("Talk") || Visible("SelectYesno") || Visible("SelectString")) return;
+        if (DialogueOpen) return;
         var target = TargetSystem.Instance();
         if (target == null) return;
         owned = actor;
-        expires = Environment.TickCount64 + 15000;
+        var nativeFate = (FateContext*)fate.Address;
+        lease.Begin(actor.Id, [0x801A0000u | actor.FateId, nativeFate->ArrayEventHandler.Id], Now);
+        lastStatus = InteractionStatus.Waiting;
         lastAdvance = 0;
+        log(L.T("Interação enviada ao NPC/objeto do FATE {0}; aguardando o contexto do diálogo.", actor.FateId));
         target->InteractWithObject((NativeObject*)obj.Address, true);
     }
 
-    public bool OwnsCurrentEvent
+    public static bool DialogueOpen => Visible("Talk") || Visible("SelectYesno") || Visible("SelectString") || Visible("SelectIconString");
+
+    private int MatchingSelectorIndex()
     {
-        get
+        if (owned == null) return -1;
+        var selector = EventHandlerSelector.Instance();
+        if (selector == null || selector->Target == null || selector->Target->GetGameObjectId().Id != owned.Id || selector->OptionsCount is < 1 or > 32) return -1;
+        var match = -1;
+        for (var i = 0; i < selector->OptionsCount; i++)
         {
-            if (owned == null || Environment.TickCount64 >= expires) { Cancel(); return false; }
-            var framework = EventFramework.Instance();
-            if (framework == null || !Services.Fates.Any(f => f.FateId == owned.FateId)) return false;
-            if (framework->SceneGameObjectId.Id != owned.Id) return false;
-            var id = 0x801A0000u | owned.FateId;
-            var first = framework->EventState1;
-            var second = framework->EventState2;
-            return (first.EventId.Id == id && first.ObjectId.Id == owned.Id) ||
-                   (second.EventId.Id == id && second.ObjectId.Id == owned.Id);
+            var option = selector->Options[i];
+            if (option.Handler == null || !lease.Matches(new(owned.Id, option.Handler->Info.EventId.Id))) continue;
+            if (match >= 0) return -1; // Ambiguous menus are not guessed.
+            match = i;
         }
+        return match;
+    }
+
+    public InteractionStatus ReadStatus(bool occupied)
+    {
+        if (owned == null) return InteractionStatus.None;
+        var framework = EventFramework.Instance();
+        var first = framework == null ? default : new EventSignal(framework->EventState1.ObjectId.Id, framework->EventState1.EventId.Id);
+        var second = framework == null ? default : new EventSignal(framework->EventState2.ObjectId.Id, framework->EventState2.EventId.Id);
+        var sceneObject = framework == null ? 0 : framework->SceneGameObjectId.Id;
+        var result = lease.Observe(Now, occupied || DialogueOpen, first, second, MatchingSelectorIndex() >= 0, sceneObject);
+        if (result != lastStatus)
+        {
+            if (result == InteractionStatus.Owned) log(L.T("Diálogo do FATE {0} reconhecido.", owned.FateId));
+            if (result is InteractionStatus.Foreign or InteractionStatus.Expired)
+                log($"FATE interaction: {result}; role={owned.Role}; event1={first.EventId:X8}; event2={second.EventId:X8}; actorMatch={first.ObjectId == owned.Id || second.ObjectId == owned.Id}; sceneMatch={sceneObject == owned.Id}; dialogue={DialogueOpen}");
+            lastStatus = result;
+        }
+        if (!lease.Active) owned = null;
+        return result;
     }
 
     public void Advance()
     {
-        if (!OwnsCurrentEvent || Environment.TickCount64 - lastAdvance < 600) return;
+        var c = Services.Conditions;
+        var occupied = c[ConditionFlag.Occupied] || c[ConditionFlag.OccupiedInQuestEvent] || c[ConditionFlag.OccupiedInEvent];
+        if (ReadStatus(occupied) != InteractionStatus.Owned || Environment.TickCount64 - lastAdvance < 600) return;
         lastAdvance = Environment.TickCount64;
+        var selectedHandler = MatchingSelectorIndex();
+        if (selectedHandler >= 0)
+        {
+            var framework = EventFramework.Instance();
+            if (framework != null) framework->InteractWithHandlerFromSelector(selectedHandler);
+            return;
+        }
         var talk = (AtkUnitBase*)Services.GameGui.GetAddonByName("Talk").Address;
         if (talk != null && talk->IsVisible)
         {
@@ -119,5 +164,5 @@ internal sealed unsafe class EventInteraction
         return addon != null && addon->IsVisible;
     }
 
-    public void Cancel() { owned = null; expires = 0; }
+    public void Cancel() { owned = null; lease.Cancel(); lastStatus = InteractionStatus.None; }
 }

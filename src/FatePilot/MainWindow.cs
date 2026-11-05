@@ -195,7 +195,7 @@ internal sealed class MainWindow(Configuration config, Runner runner, GameRuntim
             var matching = expansion.Where(z => z.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase) ||
                 Destinations.Any(d => d.TerritoryId == z.TerritoryId && d.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase))).ToArray();
             if (matching.Length == 0) continue;
-            ImGui.SetNextItemOpen(true, ImGuiCond.Once);
+            ImGui.SetNextItemOpen(false, ImGuiCond.Once);
             if (!ImGui.CollapsingHeader(expansion.Key.Expansion + "###expansion" + expansion.Key.ExpansionId)) continue;
             var columns = Math.Clamp((int)(ImGui.GetContentRegionAvail().X / (250 * ImGuiHelpers.GlobalScale)), 1, 3);
             if (ImGui.BeginTable("zones" + expansion.Key.ExpansionId, columns, ImGuiTableFlags.SizingStretchSame))

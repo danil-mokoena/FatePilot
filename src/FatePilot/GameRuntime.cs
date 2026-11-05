@@ -18,13 +18,13 @@ internal sealed class GameRuntime : IRuntime, IDisposable
     private readonly Navigation nav = new();
     private readonly Combat combat;
     private readonly Travel travel;
-    private readonly EventInteraction interaction = new();
+    private readonly EventInteraction interaction;
     private bool session, ownsTravelService;
     private ulong previousTarget, ownedTarget;
     private readonly Queue<string> messages = new();
     public string[] Messages => messages.ToArray();
     public bool NeedsRecovery => combat.NeedsRecovery;
-    public GameRuntime() { combat = new(Log); travel = new(Log); }
+    public GameRuntime() { combat = new(Log); travel = new(Log); interaction = new(Log); }
     public long ReservedGil => travel.ReservedGil;
     public int UsedTickets => travel.UsedTickets;
     public int TicketCount => travel.Tickets;
@@ -172,12 +172,16 @@ internal sealed class GameRuntime : IRuntime, IDisposable
             }
         }
         T Optional<T>(string gate, T fallback) => pi.GetIpcSubscriber<T>(gate).HasFunction ? pi.GetIpcSubscriber<T>(gate).InvokeFunc() : fallback;
+        var occupied = c[ConditionFlag.Occupied] || c[ConditionFlag.OccupiedInQuestEvent] || c[ConditionFlag.OccupiedInEvent]
+            || c[ConditionFlag.OccupiedInCutSceneEvent] || c[ConditionFlag.WatchingCutscene] || c[ConditionFlag.OccupiedSummoningBell];
+        var interactionStatus = interaction.ReadStatus(occupied);
         return new World
         {
             LoggedIn = Services.Client.IsLoggedIn, Loading = loading, Dead = player.IsDead,
             Restricted = Services.Client.IsPvP || c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95],
-            Occupied = c[ConditionFlag.Occupied] || c[ConditionFlag.OccupiedInQuestEvent] || c[ConditionFlag.OccupiedInEvent]
-                || c[ConditionFlag.OccupiedInCutSceneEvent] || c[ConditionFlag.WatchingCutscene] || c[ConditionFlag.OccupiedSummoningBell],
+            Occupied = occupied, DialogueOpen = EventInteraction.DialogueOpen,
+            InteractionDiagnostic = occupied || EventInteraction.DialogueOpen ?
+                $"occupied={c[ConditionFlag.Occupied]}; questEvent={c[ConditionFlag.OccupiedInQuestEvent]}; event={c[ConditionFlag.OccupiedInEvent]}; cutscene={c[ConditionFlag.OccupiedInCutSceneEvent] || c[ConditionFlag.WatchingCutscene]}; dialog={EventInteraction.DialogueOpen}; lease={interactionStatus}" : null,
             Casting = player.IsCasting || c[ConditionFlag.MountOrOrnamentTransition],
             InCombat = c[ConditionFlag.InCombat], Mounted = c[ConditionFlag.Mounted], Flying = c[ConditionFlag.InFlight],
             CanFly = canFly, Synced = fateManager != null && fateManager->SyncedFateId != 0 && fateManager->SyncedFateId == currentFate,
@@ -186,7 +190,10 @@ internal sealed class GameRuntime : IRuntime, IDisposable
             CanChangeInstance = Optional(IntegrationIds.TravelCanChangeInstance, false), TravelBusy = Optional(IntegrationIds.TravelIsBusy, false),
             NavReady = Optional(IntegrationIds.NavigationNavIsReady, false), NavBusy = session && nav.Busy, NavError = nav.Error,
             Position = player.Position, NearbyAetheryte = nearestHub, Fates = fates, Enemies = enemies,
-            Objectives = objectives, OwnEventInteraction = interaction.OwnsCurrentEvent,
+            Objectives = objectives, OwnEventInteraction = interactionStatus == InteractionStatus.Owned,
+            EventInteractionPending = interactionStatus == InteractionStatus.Waiting,
+            EventInteractionError = interactionStatus == InteractionStatus.Foreign ? L.T("O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.") :
+                interactionStatus == InteractionStatus.Expired ? L.T("A interação com o NPC não terminou em 15 segundos. Consulte o diagnóstico.") : null,
             Gemstones = EventInteraction.ItemCount(26807),
         };
     }
