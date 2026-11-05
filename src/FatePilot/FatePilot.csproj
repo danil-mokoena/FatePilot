@@ -1,10 +1,12 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Author>Mokoena</Author>
     <Name>FatePilot</Name>
-    <Punchline>Trace sua rota. Encontre seu destino.</Punchline>
-    <Description>Projeto independente: FATEs de combate, rota de zonas e instâncias, retorno por meta e diagnóstico. /fatepilot</Description>
+    <Punchline>Chart your route. Find your destiny.</Punchline>
+    <Description>Experimental FATE automation with combat, collection hand-ins, escorts, zone routes, instance rotation and return goals. See the README for required integrations. /fatepilot</Description>
+    <RepoUrl>https://github.com/danil-mokoena/FatePilot</RepoUrl>
+    <IconUrl>https://raw.githubusercontent.com/danil-mokoena/FatePilot/main/src/FatePilot/Assets/icon.png</IconUrl>
     <Tags>fate;automation</Tags>
     <AcceptsFeedback>false</AcceptsFeedback>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -15,4 +17,5 @@
   <ItemGroup><EmbeddedResource Include="Localization/*.json" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Assets/logo.png" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Assets/cat.png" /></ItemGroup>
+  <ItemGroup><Content Include="Assets/icon.png" Link="images/icon.png" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

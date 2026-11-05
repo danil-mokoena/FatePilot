@@ -18,6 +18,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
     private readonly Navigation nav = new();
     private readonly Combat combat;
     private readonly Travel travel;
+    private readonly EventInteraction interaction = new();
     private bool session, ownsTravelService;
     private ulong previousTarget, ownedTarget;
     private readonly Queue<string> messages = new();
@@ -93,6 +94,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
 
     public void End()
     {
+        interaction.Cancel();
         List<string> errors = [];
         void Attempt(Action action) { try { action(); } catch (Exception ex) { errors.Add(ex.Message); } }
         Attempt(nav.Stop);
@@ -138,6 +140,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
         var canFly = flightSet != 0 && state != null && state->IsAetherCurrentZoneComplete(flightSet);
         var fates = new List<FateInfo>();
         var enemies = new List<EnemyInfo>();
+        var objectives = new List<ObjectiveActor>();
         Vector3? nearestHub = null;
         if (!loading)
         {
@@ -147,7 +150,14 @@ internal sealed class GameRuntime : IRuntime, IDisposable
                 var native = (FateContext*)f.Address;
                 fates.Add(new(f.FateId, f.Name.TextValue, f.TerritoryType.RowId, (EventState)(byte)f.State,
                     f.Level, f.MaxLevel, f.Progress, f.TimeRemaining, f.Position, f.Radius,
-                    native->Rule is 1 or 2, f.HasBonus, f.StartTimeEpoch));
+                    native->Rule == 1, f.HasBonus, f.StartTimeEpoch)
+                {
+                    Kind = FateRules.FromRule(native->Rule),
+                    CanStart = native->MotivationNpc is not (0 or 0xE0000000),
+                    HeldItems = native->Rule == 2 ? EventInteraction.ItemCount(native->TurnInEventItem != 0 ? native->TurnInEventItem : native->EventItem != 0 ? native->EventItem : native->ReqEventItem) : 0,
+                    HandedIn = native->HandInCount,
+                });
+                EventInteraction.SnapshotObjectives(native, objectives);
             }
             foreach (var obj in Services.Objects)
             {
@@ -176,6 +186,8 @@ internal sealed class GameRuntime : IRuntime, IDisposable
             CanChangeInstance = Optional(IntegrationIds.TravelCanChangeInstance, false), TravelBusy = Optional(IntegrationIds.TravelIsBusy, false),
             NavReady = Optional(IntegrationIds.NavigationNavIsReady, false), NavBusy = session && nav.Busy, NavError = nav.Error,
             Position = player.Position, NearbyAetheryte = nearestHub, Fates = fates, Enemies = enemies,
+            Objectives = objectives, OwnEventInteraction = interaction.OwnsCurrentEvent,
+            Gemstones = EventInteraction.ItemCount(26807),
         };
     }
 
@@ -190,6 +202,9 @@ internal sealed class GameRuntime : IRuntime, IDisposable
     }
 
     public void Move(Vector3 position, bool fly) => nav.Move(position, fly);
+    public void Interact(ObjectiveActor actor) { Target(actor.Id); interaction.Begin(actor); }
+    public void AdvanceEventInteraction() => interaction.Advance();
+    public void CancelEventInteraction() => interaction.Cancel();
     public void StopMovement() => nav.Stop();
     public unsafe void Mount() => ActionManager.Instance()->UseAction(ActionType.GeneralAction, 9);
     public unsafe void Dismount() => ActionManager.Instance()->UseAction(ActionType.GeneralAction, 23);
