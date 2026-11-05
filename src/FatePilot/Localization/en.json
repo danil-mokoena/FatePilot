@@ -188,5 +188,10 @@
   "Sem aetheryte desbloqueado nesta zona. A viagem automática exige um destino de teleporte.": "No attuned aetheryte in this zone. Automatic travel requires a teleport destination.",
   "Sua rota ({0} zonas)": "Your route ({0} zones)",
   "Tempo máximo do objetivo excedido.": "Maximum objective time exceeded.",
-  "Um chefe de grupo entrou em combate com você. Sessão interrompida.": "A group boss engaged you. Session stopped."
+  "Um chefe de grupo entrou em combate com você. Sessão interrompida.": "A group boss engaged you. Session stopped.",
+  "Interagindo com o objetivo do FATE {0}: {1}.": "Interacting with FATE {0} objective: {1}.",
+  "Interação enviada ao NPC/objeto do FATE {0}; aguardando o contexto do diálogo.": "Interaction sent to FATE {0} NPC/object; waiting for dialogue context.",
+  "Diálogo do FATE {0} reconhecido.": "FATE {0} dialogue recognized.",
+  "O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.": "The dialogue does not match the expected NPC and event. Check Diagnostics.",
+  "A interação com o NPC não terminou em 15 segundos. Consulte o diagnóstico.": "The NPC interaction did not finish within 15 seconds. Check Diagnostics."
 }

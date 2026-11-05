@@ -188,5 +188,10 @@
   "Sem aetheryte desbloqueado nesta zona. A viagem automática exige um destino de teleporte.": "No hay un etérito desbloqueado en esta zona. El viaje automático requiere un destino de teletransporte.",
   "Sua rota ({0} zonas)": "Tu ruta ({0} zonas)",
   "Tempo máximo do objetivo excedido.": "Se superó el tiempo máximo del objetivo.",
-  "Um chefe de grupo entrou em combate com você. Sessão interrompida.": "Un jefe de grupo entró en combate contigo. Sesión detenida."
+  "Um chefe de grupo entrou em combate com você. Sessão interrompida.": "Un jefe de grupo entró en combate contigo. Sesión detenida.",
+  "Interagindo com o objetivo do FATE {0}: {1}.": "Interactuando con el objetivo del FATE {0}: {1}.",
+  "Interação enviada ao NPC/objeto do FATE {0}; aguardando o contexto do diálogo.": "Interacción enviada al PNJ/objeto del FATE {0}; esperando el contexto del diálogo.",
+  "Diálogo do FATE {0} reconhecido.": "Diálogo del FATE {0} reconocido.",
+  "O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.": "El diálogo no corresponde al PNJ y al evento esperados. Consulta Diagnóstico.",
+  "A interação com o NPC não terminou em 15 segundos. Consulte o diagnóstico.": "La interacción con el PNJ no terminó en 15 segundos. Consulta Diagnóstico."
 }
