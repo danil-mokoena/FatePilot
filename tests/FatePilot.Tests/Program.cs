@@ -127,6 +127,72 @@ Test("Owned dialogue advances while unrelated dialogue still stops", () =>
     r.Tick(world with{Occupied=true},3);
     Assert(!r.IsRunning);
 });
+Test("An issued interaction waits for event context without clicking or stopping", () =>
+{
+    var (r,rt)=Started(); r.Tick(world,1);
+    r.Tick(world with{Occupied=true,EventInteractionPending=true},2);
+    Assert(r.IsRunning && rt.Advances==0 && !rt.CombatEnabled);
+    r.Tick(world with{Occupied=true,OwnEventInteraction=true},3);
+    Assert(r.IsRunning && rt.Advances==1);
+});
+Test("Own dismount transition can be occupied briefly without adopting a dialog", () =>
+{
+    var w=world with{CurrentFate=1,Position=fate.Position,Mounted=true,Synced=true};
+    var (r,rt)=Started(w);
+    r.Tick(w,1);r.Tick(w,2);r.Tick(w,3);r.Tick(w,4);
+    Assert(r.State==RunState.Landing);
+    r.Tick(w with{Mounted=false,Occupied=true},4.25);
+    Assert(r.IsRunning && rt.Advances==0);
+    r.Tick(w with{Mounted=false,Casting=true},4.5);
+    Assert(r.State==RunState.Landing);
+    r.Tick(w with{Mounted=false},5);
+    Assert(r.State==RunState.Syncing);
+    r.Tick(w with{Mounted=false,Occupied=true,DialogueOpen=true},5.25);
+    Assert(!r.IsRunning);
+});
+Test("Occupied after our mount transition deadline still stops", () =>
+{
+    var w=world with{CurrentFate=1,Position=fate.Position,Mounted=true,Synced=true};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=4;i++)r.Tick(w,i);
+    r.Tick(w with{Occupied=true},10);
+    Assert(!r.IsRunning && rt.Advances==0);
+});
+Test("Interaction ownership waits for context then accepts the expected actor and handler", () =>
+{
+    var lease=new InteractionLease(); lease.Begin(502,[0x801A0001,0x000D0007],0);
+    Assert(lease.Observe(.25,true,default,default,false)==InteractionStatus.Waiting);
+    Assert(lease.Observe(1,true,new(502,0x000D0007),default,false)==InteractionStatus.Owned);
+    Assert(lease.Observe(2,false,default,default,false)==InteractionStatus.None && !lease.Active);
+});
+Test("Interaction ownership rejects wrong NPCs and unrelated handlers", () =>
+{
+    foreach(var signal in new[]{new EventSignal(999,0x801A0001),new EventSignal(502,0x00040001)})
+    {
+        var lease=new InteractionLease();lease.Begin(502,[0x801A0001],0);
+        Assert(lease.Observe(3,true,signal,default,false)==InteractionStatus.Foreign);
+        Assert(!lease.Active);
+    }
+});
+Test("Scene actor can identify an owned dialog while the event object is unset", () =>
+{
+    var lease=new InteractionLease();lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(1,true,new(0,0x801A0001),default,false,502)==InteractionStatus.Owned);
+    lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(3,true,new(0,0x00040001),default,false,502)==InteractionStatus.Foreign);
+});
+Test("NPC selector can be owned before scene fields exist but ownership expires", () =>
+{
+    var lease=new InteractionLease();lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(.25,true,default,default,true)==InteractionStatus.Owned);
+    Assert(lease.Observe(15,true,default,default,true)==InteractionStatus.Expired && !lease.Active);
+});
+Test("An interaction that opens nothing releases its retry window", () =>
+{
+    var lease=new InteractionLease();lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(.5,false,default,default,false)==InteractionStatus.Waiting);
+    Assert(lease.Observe(3,false,default,default,false)==InteractionStatus.None && !lease.Active);
+});
 Test("Gemstone session counter counts observed gains, not the initial balance", () =>
 {
     var (r,rt)=Started(world with{Gemstones=100});
