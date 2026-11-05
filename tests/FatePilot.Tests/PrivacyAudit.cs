@@ -15,12 +15,12 @@ internal static class PrivacyAudit
             .Where(p => !p.Split(Path.DirectorySeparatorChar).Any(x => x is "obj" or "bin"));
         foreach (var path in files)
         {
-            var source = File.ReadAllText(path);
+            var source = File.ReadAllText(path).Replace("\r\n", "\n");
             Require(!Regex.IsMatch(source, @"\b(HttpClient|WebClient|WebRequest|Socket|TcpClient|UdpClient|ProcessStartInfo|DllImport|LibraryImport|NativeLibrary|RegistryKey)\b|\bProcess\s*\.|Assembly\s*\.\s*Load|SendChat|SendMessage|ContentId|AccountId"), "Unreviewed sensitive API: " + path);
             var urls = Regex.Matches(source, "https?://[^\\\"\\s]+").Select(m => m.Value).ToArray();
             Require(urls.Length == 0 || (Path.GetFileName(path) == "MainWindow.cs" && urls.SequenceEqual(new[] { "https://ko-fi.com/mokoena" })), "Unexpected runtime endpoint: " + path);
             if (source.Contains("OpenLink("))
-                Require(Path.GetFileName(path) == "MainWindow.cs" && Regex.IsMatch(source, "if \\(ImGui.Button\\(\"Buy my cat a treat\", new Vector2\\(196, 32\\)\\)\\)\\s+Dalamud.Utility.Util.OpenLink\\(\"https://ko-fi.com/mokoena\"\\);"), "Browser must be opened only by the fixed donation button");
+                Require(Path.GetFileName(path) == "MainWindow.cs" && source.Contains("if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Heart, \"Buy my cat a treat\"))\n            Dalamud.Utility.Util.OpenLink(\"https://ko-fi.com/mokoena\");"), "Browser must be opened only by the fixed donation button");
             foreach (Match call in Regex.Matches(source, @"File\.(WriteAllText|ReadAllText|Delete)\(([^,)]+)"))
                 Require(Path.GetFileName(path) == "Combat.cs" && call.Groups[2].Value == "RecoveryPath", "Unreviewed file access: " + path);
         }
