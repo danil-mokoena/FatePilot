@@ -7,9 +7,10 @@ public static class Selection
     public static FateKey Key(FateInfo f, World w) => new(w.Territory, w.Instance, f.Id, f.StartedAt);
 
     public static FateInfo? Choose(World w, RunOptions o, IReadOnlyDictionary<FateKey, double> excludedUntil, double now) => w.Fates
-        .Where(f => f.TerritoryId == w.Territory && f.State == EventState.Running && f.IsCombat
+        .Where(f => f.TerritoryId == w.Territory && (f.State == EventState.Running || (f.State == EventState.Preparing && f.CanStart)) && FateRules.Enabled(f, o)
+            && (!o.ExcludeGroupBosses || !FateRules.IsGroupBoss(f.Id))
             && f.Level <= w.Level + o.LevelAbovePlayer && f.Progress < o.MaximumProgress
-            && f.SecondsLeft >= o.MinimumSecondsLeft && !o.ExcludedFates.Contains(f.Id)
+            && (f.State == EventState.Preparing || f.SecondsLeft >= o.MinimumSecondsLeft) && !o.ExcludedFates.Contains(f.Id)
             && (!excludedUntil.TryGetValue(Key(f, w), out var until) || until <= now))
         .OrderBy(f => Vector3.Distance(w.Position, f.Position) - (o.PreferBonus && f.Bonus ? 250 : 0))
         .ThenBy(f => f.Id).FirstOrDefault();

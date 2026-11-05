@@ -4,12 +4,14 @@ using System.Text.Json;
 namespace FatePilot.Core;
 
 // The loop is independent of FFXIV. Tick consumes a snapshot and emits small, bounded actions.
-public sealed class Runner(IRuntime runtime)
+public sealed partial class Runner(IRuntime runtime)
 {
     public RunState State { get; private set; } = RunState.Stopped;
     public string Status { get; private set; } = L.T("Pronto para configurar.");
     public int Completed { get; private set; }
     public int Unconfirmed { get; private set; }
+    public int GemstonesEarned { get; private set; }
+    private int previousGemstones;
     public FateInfo? Selected { get; private set; }
     public bool IsRunning => State is not (RunState.Stopped or RunState.Finished or RunState.Faulted);
 
@@ -36,6 +38,8 @@ public sealed class Runner(IRuntime runtime)
                 throw new InvalidOperationException(L.T("Inicie em mundo aberto, vivo, fora de combate e com os diálogos fechados."));
             runtime.Begin(options);
             Completed = Unconfirmed = 0;
+            GemstonesEarned = 0;
+            previousGemstones = world.Gemstones;
             Selected = null;
             visited.Clear();
             excludedUntil.Clear();
@@ -45,7 +49,7 @@ public sealed class Runner(IRuntime runtime)
             sessionJob = world.Job;
             lastAction = now - 10;
             idleSince = noEnemySince = now;
-            Enter(RunState.Selecting, L.T("Procurando FATEs de combate."), now);
+            Enter(RunState.Selecting, L.T("Procurando FATEs elegíveis."), now);
         }
         catch (Exception ex) { Stop(L.T("Não foi possível iniciar: {0}", ex.Message), true); }
     }
@@ -66,6 +70,11 @@ public sealed class Runner(IRuntime runtime)
         if (!IsRunning) return;
         try
         {
+            if (w.LoggedIn && !w.Loading)
+            {
+                GemstonesEarned += Math.Max(0, w.Gemstones - previousGemstones);
+                previousGemstones = w.Gemstones;
+            }
             if (!w.LoggedIn && !w.Loading) { Stop(L.T("Sessão encerrada: personagem desconectado."), true); return; }
             if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
@@ -76,7 +85,19 @@ public sealed class Runner(IRuntime runtime)
             if (w.Loading) { Stop(L.T("Transição de área não solicitada pelo FatePilot."), true); return; }
             if (w.Territory != expectedTerritory) { Stop(L.T("A zona mudou fora da rota do FatePilot."), true); return; }
             if (w.TravelBusy) { Stop(L.T("módulo de viagens iniciou outra tarefa durante a sessão."), true); return; }
-            if (w.Occupied) { Stop(L.T("Um diálogo ou outra interação interrompeu a sessão.")); return; }
+            if (options.ExcludeGroupBosses && w.Enemies.Any(e => e.TargetingPlayer && FateRules.IsGroupBoss(e.FateId)))
+            { Stop(L.T("Um chefe de grupo entrou em combate com você. Sessão interrompida.")); return; }
+            if (w.Occupied)
+            {
+                if (w.OwnEventInteraction && Selected != null)
+                {
+                    runtime.StopMovement();
+                    runtime.SetCombat(false);
+                    runtime.AdvanceEventInteraction();
+                    return;
+                }
+                Stop(L.T("Um diálogo ou outra interação interrompeu a sessão.")); return;
+            }
             if (w.NavError != null) { SkipOrFail(L.T("Navegação: {0}", w.NavError), now); return; }
 
             switch (State)
@@ -88,6 +109,7 @@ public sealed class Runner(IRuntime runtime)
                 case RunState.Landing: TickLanding(w, now); break;
                 case RunState.Syncing: TickSync(w, now); break;
                 case RunState.Fighting: TickFight(w, now); break;
+                case RunState.StartingEvent: TickStartEvent(w, now); break;
                 case RunState.HubApproach: TickHub(w, now); break;
             }
         }
@@ -126,6 +148,7 @@ public sealed class Runner(IRuntime runtime)
             Selected = fate;
             selectedKey = Selection.Key(fate, w);
             participated = false;
+            ResetObjectives(fate, now);
             noEnemySince = now;
             Enter(RunState.Mounting, L.T("Preparando deslocamento: {0}", fate.Name), now);
             return;
@@ -155,10 +178,15 @@ public sealed class Runner(IRuntime runtime)
 
     private FateInfo? RefreshFate(World w, double now)
     {
-        var current = w.Fates.FirstOrDefault(f => f.Id == Selected?.Id && f.StartedAt == selectedKey.StartedAt);
-        if (current == null || current.State is EventState.Ended or EventState.Failed || current.Progress >= 100)
+        var current = w.Fates.FirstOrDefault(f => f.Id == Selected?.Id && (f.StartedAt == selectedKey.StartedAt || Selected.State == EventState.Preparing));
+        if (current != null && Selected?.State == EventState.Preparing && current.State == EventState.Running)
+            selectedKey = Selection.Key(current, w);
+        if (current?.EffectiveKind == FateKind.Collection) ObserveCollectionProgress(current, now);
+        var canStillHandIn = current?.EffectiveKind == FateKind.Collection && current.HeldItems > 0 && current.State is EventState.Running or EventState.Ending;
+        if (current == null || current.State is EventState.Ended or EventState.Failed || (current.Progress >= 100 && !canStillHandIn))
         {
             runtime.StopMovement();
+            runtime.CancelEventInteraction();
             runtime.SetCombat(false);
             if (participated && current != null && (current.State == EventState.Ended || (current.Progress >= 100 && current.State != EventState.Failed)))
             {
@@ -211,20 +239,23 @@ public sealed class Runner(IRuntime runtime)
 
     private void TickLanding(World w, double now)
     {
-        if (RefreshFate(w, now) == null) return;
+        var f = RefreshFate(w, now);
+        if (f == null) return;
         if (w.Mounted || w.Flying)
         {
             if (Throttle(now, 2)) runtime.Dismount();
             if (now - since > 25) SkipOrFail(L.T("Não foi possível pousar/desmontar."), now);
             return;
         }
-        Enter(RunState.Syncing, L.T("Verificando sincronização de nível."), now);
+        Enter(f.State == EventState.Preparing ? RunState.StartingEvent : RunState.Syncing,
+            f.State == EventState.Preparing ? L.T("Iniciando o FATE pelo NPC.") : L.T("Verificando sincronização de nível."), now);
     }
 
     private void TickSync(World w, double now)
     {
         var f = RefreshFate(w, now);
         if (f == null) return;
+        if (f.State == EventState.Preparing) { Enter(RunState.StartingEvent, L.T("Iniciando o FATE pelo NPC."), now); return; }
         if (w.CurrentFate != f.Id)
         {
             if (w.InCombat) { Stop(L.T("Combate começou fora do FATE selecionado."), true); return; }
@@ -248,10 +279,16 @@ public sealed class Runner(IRuntime runtime)
         if (w.InCombat && Selected?.Id == w.CurrentFate) participated = true;
         var f = RefreshFate(w, now);
         if (f == null) return;
-        if (w.CurrentFate != f.Id)
+        var finalHandIn = f.EffectiveKind == FateKind.Collection && f.State == EventState.Ending && f.HeldItems > 0;
+        if (w.CurrentFate != f.Id && !finalHandIn)
         {
             runtime.SetCombat(false);
             Enter(RunState.Syncing, L.T("Retornando ao limite do FATE."), now);
+            return;
+        }
+        if (f.EffectiveKind is FateKind.Collection or FateKind.Escort or FateKind.Defense)
+        {
+            TickObjective(w, f, now);
             return;
         }
         var enemy = w.Enemies.Where(e => e.FateId == f.Id || e.TargetingPlayer)
@@ -281,6 +318,7 @@ public sealed class Runner(IRuntime runtime)
             return;
         }
         runtime.StopMovement();
+        runtime.CancelEventInteraction();
         runtime.SetCombat(false);
         teleportDestination = destination;
         sawLoading = false;
@@ -344,6 +382,7 @@ public sealed class Runner(IRuntime runtime)
         runtime.Log(L.T("Ignorando {0} por 5 minutos: {1}", Selected.Name, reason));
         excludedUntil[selectedKey] = now + 300;
         Selected = null;
+        runtime.CancelEventInteraction();
         runtime.StopMovement();
         runtime.SetCombat(false);
         Enter(RunState.Selecting, reason, now);

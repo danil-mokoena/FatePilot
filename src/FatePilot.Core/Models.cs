@@ -2,12 +2,22 @@ using System.Numerics;
 
 namespace FatePilot.Core;
 
-public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted }
+public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent }
 public enum EventState { Other, Preparing = 3, Running = 4, Ending = 5, Ended = 7, Failed = 8 }
+public enum FateKind { Unknown, Combat, Collection, Defense, Escort }
+public enum ObjectiveRole { Starter, Recipient, Escort, Pickup }
+public sealed record ObjectiveActor(ulong Id, ushort FateId, ObjectiveRole Role, Vector3 Position, float Hitbox = 0);
 
 public sealed record Destination(uint TerritoryId, uint AetheryteId, string Name);
 public sealed record FateInfo(ushort Id, string Name, uint TerritoryId, EventState State, int Level,
-    int MaxLevel, int Progress, float SecondsLeft, Vector3 Position, float Radius, bool IsCombat, bool Bonus, long StartedAt);
+    int MaxLevel, int Progress, float SecondsLeft, Vector3 Position, float Radius, bool IsCombat, bool Bonus, long StartedAt)
+{
+    public FateKind Kind { get; init; }
+    public FateKind EffectiveKind => Kind == FateKind.Unknown && IsCombat ? FateKind.Combat : Kind;
+    public bool CanStart { get; init; }
+    public int HeldItems { get; init; }
+    public int HandedIn { get; init; }
+}
 public readonly record struct FateKey(uint Territory, int Instance, ushort Id, long StartedAt);
 public sealed record EnemyInfo(ulong Id, ushort FateId, Vector3 Position, float Hitbox, bool TargetingPlayer);
 
@@ -18,6 +28,10 @@ public sealed class RunOptions
     public bool UseMount { get; set; } = true;
     public bool UseFlight { get; set; } = true;
     public bool PreferBonus { get; set; } = true;
+    public bool IncludeCollection { get; set; } = true;
+    public int CollectionBatchSize { get; set; } = 15;
+    public bool IncludeEscort { get; set; } = true;
+    public bool ExcludeGroupBosses { get; set; } = true;
     public int LevelAbovePlayer { get; set; } = 3;
     public int MaximumProgress { get; set; } = 85;
     public int MinimumSecondsLeft { get; set; } = 90;
@@ -34,6 +48,8 @@ public sealed class RunOptions
     {
         if (TicketMinimumFare < 0 || MaximumTeleportGil < 0)
             throw new InvalidOperationException(L.T("Os limites de gastos não podem ser negativos."));
+        if (CollectionBatchSize is < 1 or > 99)
+            throw new InvalidOperationException(L.T("O lote de coleta deve ter entre 1 e 99 itens."));
         if (IdleSeconds < 10 || MinimumSecondsLeft < 0 || LevelAbovePlayer < 0 || MaximumProgress is < 1 or > 100 || ReturnAfterFates < 0)
             throw new InvalidOperationException(L.T("Os filtros de FATEs contêm valores inválidos."));
         if (ReturnAfterFates > 0 && ReturnDestination == null)
@@ -72,6 +88,9 @@ public sealed record World
     public string? NavError { get; init; }
     public IReadOnlyList<FateInfo> Fates { get; init; } = [];
     public IReadOnlyList<EnemyInfo> Enemies { get; init; } = [];
+    public IReadOnlyList<ObjectiveActor> Objectives { get; init; } = [];
+    public bool OwnEventInteraction { get; init; }
+    public int Gemstones { get; init; }
 }
 
 public interface IRuntime
@@ -89,4 +108,7 @@ public interface IRuntime
     void ConfirmTeleport();
     void ChangeInstance(int instance);
     void Log(string message);
+    void Interact(ObjectiveActor actor);
+    void AdvanceEventInteraction();
+    void CancelEventInteraction();
 }
