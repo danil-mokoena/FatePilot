@@ -90,6 +90,10 @@ public sealed record World
     public IReadOnlyList<EnemyInfo> Enemies { get; init; } = [];
     public IReadOnlyList<ObjectiveActor> Objectives { get; init; } = [];
     public bool OwnEventInteraction { get; init; }
+    public bool EventInteractionPending { get; init; }
+    public bool DialogueOpen { get; init; }
+    public string? EventInteractionError { get; init; }
+    public string? InteractionDiagnostic { get; init; }
     public int Gemstones { get; init; }
 }
 

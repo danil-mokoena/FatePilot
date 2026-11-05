@@ -19,6 +19,7 @@ public sealed partial class Runner(IRuntime runtime)
     private readonly Dictionary<FateKey, double> excludedUntil = [];
     private readonly HashSet<int> visited = [];
     private double since, lastAction = -100, lastMotion, idleSince, noEnemySince;
+    private double transitionUntil = -1;
     private Vector3 lastPosition;
     private uint sessionJob;
     private uint expectedTerritory;
@@ -34,7 +35,7 @@ public sealed partial class Runner(IRuntime runtime)
         {
             options = JsonSerializer.Deserialize<RunOptions>(JsonSerializer.Serialize(config))!;
             options.Validate();
-            if (!world.LoggedIn || world.Loading || world.Dead || world.Restricted || world.InCombat || world.Occupied || world.Casting)
+            if (!world.LoggedIn || world.Loading || world.Dead || world.Restricted || world.InCombat || world.Occupied || world.DialogueOpen || world.Casting)
                 throw new InvalidOperationException(L.T("Inicie em mundo aberto, vivo, fora de combate e com os diálogos fechados."));
             runtime.Begin(options);
             Completed = Unconfirmed = 0;
@@ -48,6 +49,7 @@ public sealed partial class Runner(IRuntime runtime)
             expectedTerritory = world.Territory;
             sessionJob = world.Job;
             lastAction = now - 10;
+            transitionUntil = -1;
             idleSince = noEnemySince = now;
             Enter(RunState.Selecting, L.T("Procurando FATEs elegíveis."), now);
         }
@@ -87,15 +89,21 @@ public sealed partial class Runner(IRuntime runtime)
             if (w.TravelBusy) { Stop(L.T("módulo de viagens iniciou outra tarefa durante a sessão."), true); return; }
             if (options.ExcludeGroupBosses && w.Enemies.Any(e => e.TargetingPlayer && FateRules.IsGroupBoss(e.FateId)))
             { Stop(L.T("Um chefe de grupo entrou em combate com você. Sessão interrompida.")); return; }
-            if (w.Occupied)
+            if (w.EventInteractionError != null) { Stop(w.EventInteractionError); return; }
+            if (Selected != null && (w.OwnEventInteraction || w.EventInteractionPending))
             {
-                if (w.OwnEventInteraction && Selected != null)
-                {
-                    runtime.StopMovement();
-                    runtime.SetCombat(false);
-                    runtime.AdvanceEventInteraction();
-                    return;
-                }
+                runtime.StopMovement();
+                runtime.SetCombat(false);
+                if (w.OwnEventInteraction) runtime.AdvanceEventInteraction();
+                return;
+            }
+            if (w.Occupied || w.DialogueOpen)
+            {
+                // Our own mount/dismount can briefly set Occupied without a dialogue.
+                // Wait only inside the action's deadline and never click during it.
+                if (!w.DialogueOpen && now < transitionUntil)
+                { runtime.StopMovement(); runtime.SetCombat(false); return; }
+                runtime.Log($"Interaction stopped in {State}: {w.InteractionDiagnostic ?? "no native details"}");
                 Stop(L.T("Um diálogo ou outra interação interrompeu a sessão.")); return;
             }
             if (w.NavError != null) { SkipOrFail(L.T("Navegação: {0}", w.NavError), now); return; }
@@ -210,7 +218,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (w.InCombat) { Enter(RunState.Landing, L.T("Preparando combate durante o deslocamento."), now); return; }
         if (options.UseMount && Vector3.Distance(w.Position, f.Position) > 40 && !w.Mounted && now - since < 10)
         {
-            if (!w.Casting && Throttle(now, 3)) runtime.Mount();
+            if (!w.Casting && Throttle(now, 3)) { transitionUntil = now + 5; runtime.Mount(); }
             return;
         }
         if (w.Casting) return;
@@ -243,10 +251,11 @@ public sealed partial class Runner(IRuntime runtime)
         if (f == null) return;
         if (w.Mounted || w.Flying)
         {
-            if (Throttle(now, 2)) runtime.Dismount();
+            if (Throttle(now, 2)) { transitionUntil = now + 5; runtime.Dismount(); }
             if (now - since > 25) SkipOrFail(L.T("Não foi possível pousar/desmontar."), now);
             return;
         }
+        if (w.Casting) return;
         Enter(f.State == EventState.Preparing ? RunState.StartingEvent : RunState.Syncing,
             f.State == EventState.Preparing ? L.T("Iniciando o FATE pelo NPC.") : L.T("Verificando sincronização de nível."), now);
     }

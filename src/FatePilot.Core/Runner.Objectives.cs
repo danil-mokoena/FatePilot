@@ -139,6 +139,7 @@ public sealed partial class Runner
         if (w.Casting || w.Occupied || now - lastInteraction < 3) return;
         if (interactionActor != actor.Id) { interactionActor = actor.Id; interactionAttempts = 0; }
         if (interactionAttempts >= 5) { SkipOrFail(L.T("Interação do FATE não confirmou progresso."), now); return; }
+        runtime.Log(L.T("Interagindo com o objetivo do FATE {0}: {1}.", actor.FateId, actor.Role));
         runtime.Interact(actor);
         interactionRole = actor.Role;
         lastInteraction = now;
