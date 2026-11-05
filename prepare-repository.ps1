@@ -2,7 +2,7 @@ param(
     [string]$Owner = 'danil-mokoena',
     [string]$Repository = 'FatePilot',
     [string]$ReleaseDirectory = (Join-Path $PSScriptRoot 'artifacts'),
-    [string]$Tag = 'v0.1.0'
+    [string]$Tag = 'v0.2.0'
 )
 $ErrorActionPreference = 'Stop'
 if ($Owner -notmatch '^[A-Za-z0-9][A-Za-z0-9-]*$' -or $Repository -notmatch '^[A-Za-z0-9_.-]+$' -or $Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid repository or tag.' }
@@ -20,9 +20,10 @@ $entry = [ordered]@{
     Name = 'FatePilot'
     InternalName = 'FatePilot'
     AssemblyVersion = $dllVersion
-    Description = 'Experimental 0.1: combat FATE routes, zone and instance rotation, return goals and teleport budgets. Requires the integrations listed in the README. In-game validation is pending. /fatepilot'
+    Description = $manifest.Description
     Punchline = 'Chart your route. Find your destiny. By Mokoena.'
     RepoUrl = $repoUrl
+    IconUrl = $manifest.IconUrl
     ApplicableVersion = 'any'
     DalamudApiLevel = $manifest.DalamudApiLevel
     Tags = @('fate', 'automation', 'experimental')

@@ -18,17 +18,21 @@ if ($LASTEXITCODE -ne 0) { throw 'Tests or privacy audit failed.' }
 
 $manifest = Get-Content -LiteralPath (Join-Path $binaryRoot 'FatePilot.json') -Raw | ConvertFrom-Json
 if ($manifest.Author -ne 'Mokoena' -or $manifest.DalamudApiLevel -ne 15 -or $manifest.AcceptsFeedback -ne $false) { throw 'Unexpected manifest.' }
+$version = ([Version]$manifest.AssemblyVersion).ToString(3)
+if ($manifest.IconUrl -ne 'https://raw.githubusercontent.com/danil-mokoena/FatePilot/main/src/FatePilot/Assets/icon.png') { throw 'Missing or unexpected installer icon.' }
 
 # Stage only explicitly selected runtime files; never bundle installed dependencies.
-$packageRoot = Join-Path $outputRoot 'FatePilot-0.1.0'
+$packageRoot = Join-Path $outputRoot "FatePilot-$version"
 New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
 $runtimeNames = @('FatePilot.dll', 'FatePilot.Core.dll', 'FatePilot.deps.json', 'FatePilot.json')
 foreach ($name in $runtimeNames) { Copy-Item -LiteralPath (Join-Path $binaryRoot $name) -Destination (Join-Path $packageRoot $name) -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot 'images') | Out-Null
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'src/FatePilot/Assets/icon.png') -Destination (Join-Path $packageRoot 'images/icon.png') -Force
 $docNames = @('README.md', 'SECURITY.md', 'INTEGRATIONS.md', 'VALIDATION.md')
 foreach ($name in $docNames) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $packageRoot $name) -Force }
 
-$pluginZip = Join-Path $outputRoot 'FatePilot-0.1.0-plugin.zip'
-$sourceZip = Join-Path $outputRoot 'FatePilot-0.1.0-source.zip'
+$pluginZip = Join-Path $outputRoot "FatePilot-$version-plugin.zip"
+$sourceZip = Join-Path $outputRoot "FatePilot-$version-source.zip"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 function Write-TaskZip([string]$Destination, [string]$Root, [string[]]$Files) {
     $stream = [IO.File]::Open($Destination, [IO.FileMode]::Create, [IO.FileAccess]::ReadWrite)
@@ -40,8 +44,9 @@ function Write-TaskZip([string]$Destination, [string]$Root, [string[]]$Files) {
         }
     } finally { $zip.Dispose(); $stream.Dispose() }
 }
-$pluginFiles = @($runtimeNames + $docNames | ForEach-Object { Join-Path $packageRoot $_ })
+$pluginFiles = @($runtimeNames + $docNames + @('images/icon.png') | ForEach-Object { Join-Path $packageRoot $_ })
 Write-TaskZip $pluginZip $packageRoot $pluginFiles
+& (Join-Path $PSScriptRoot 'prepare-repository.ps1') -ReleaseDirectory $outputRoot -Tag "v$version"
 
 $sourceFiles = @(
     Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src'), (Join-Path $PSScriptRoot 'tests') -Recurse -File |

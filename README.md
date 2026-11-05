@@ -3,9 +3,9 @@
 <p align="center"><strong>Chart your route. Find your destiny.</strong><br />By Mokoena</p>
 <p align="center"><a href="#installation">Installation</a> · <a href="#dependencies">Dependencies</a> · <a href="#features">Features</a> · <a href="SECURITY.md">Privacy &amp; security</a> · <a href="https://github.com/danil-mokoena/FatePilot/releases">Releases</a></p>
 
-FatePilot is an independent Dalamud plugin that coordinates combat FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
+FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Status:** experimental 0.1 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Status:** experimental 0.2.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
 
 > [!WARNING]
 > **Use at your own risk.** Square Enix prohibits unauthorized third-party tools and automated or unattended play. Using this plugin may result in account suspension or a permanent ban. See the official [third-party tools statement](https://na.finalfantasyxiv.com/lodestone/topics/detail/68f4c4d3bdea34f732ee8db3425122b8b8d6ec3b) and [prohibited activities policy](https://support.na.square-enix.com/faqarticle.php?id=5382&kid=68216).
@@ -13,18 +13,21 @@ FatePilot is an independent Dalamud plugin that coordinates combat FATE sessions
 > FATE farming is associated with botting and RMT in [community discussions](https://www.reddit.com/r/ffxivdiscussion/comments/12ki4a0/fate_botting_in_endwalker_zones/). Claims that FATEs receive particular enforcement priority are community perceptions, not a confirmed official policy. FatePilot offers no protection against detection or account penalties. You are responsible for the decision to use it.
 
 > [!IMPORTANT]
-> **This is a preview build, not a production-ready release.** It compiles cleanly and passes 40 local tests, including simulated session behavior and static privacy checks. Live combat, navigation, instance changes, ticket handling and UI rendering still require in-game validation. Publishing the build does not change that status.
+> **This is a preview build.** Initial combat has been reported working by a user. The new collection, NPC interaction and escort adapters still need in-game validation, as do the revised UI and full travel/ticket cycle. The 52 local tests cover simulated controller behavior, translations and static privacy checks; they do not execute the native adapters in a live client.
 
 ## Features
 
-| Area | Available in 0.1 |
+| Area | Available in 0.2 |
 |---|---|
-| FATE selection | Active combat FATEs, level/progress/time filters, bonus preference and an ignore list |
-| Travel | Ordered zone routes, discovered instance rotation, mounts, unlocked flight and level sync |
+| FATE selection | Combat, collection, escort and defense; bounded NPC activation; level/progress/time filters, bonus preference and an ignore list |
+| Collection | Ground pickups, objective enemies and repeated NPC hand-ins; default batch of 15, with partial deliveries after 45 seconds or near the end |
+| Escort and defense | Follow the associated friendly objective and fight event enemies |
+| Travel | Zone image cards grouped by expansion, reorderable routes, discovered instance rotation, mounts, unlocked flight and level sync |
 | Session goals | Return to a selected city after a chosen number of observed successful FATEs |
 | Teleport costs | Aetheryte Ticket switch, minimum fare, explicit gil fallback and a session gil budget |
 | Recovery | Stuck-route handling, operation timeouts, control conflict detection and restoration of previous settings |
-| Interface | Slate and gold design, compact Start/Stop controls, session statistics and local diagnostics |
+| Interface | Slate and gold design, compact Start/Stop controls, session FATE/gemstone counters, active-event timer and local diagnostics |
+| Group bosses | Known large-group bosses such as Daivadipa and Chi excluded by default |
 
 The plugin does not start farming simply because it is loaded. Start a session explicitly from the panel or command.
 
@@ -69,7 +72,17 @@ These integrations are installed separately. Their implementations are not bundl
 
 ## First session
 
-Stop other combat, movement and travel automation first. In **Session**, choose a language, a return city and a FATE goal. In **Route**, add one aetheryte per zone in the order you want to visit. Review **Costs** before starting.
+Stop other combat, movement and travel automation first. In **Session**, choose a language, a return city and a FATE goal. In **Route**, click zone cards under each expansion to select a route, then use the arrows to reorder it. If a zone has multiple unlocked aetherytes, choose its arrival point. Review **Costs** and **FATEs** before starting.
+
+The catalog reads the client's overworld zones and loading artwork locally: 48 zones in the data used for this build. Zones without a direct unlocked teleport destination remain visible but cannot be added. Some older zones share regional artwork. The selected route repeats until a goal or Stop ends the session.
+
+### Collection and escorts
+
+Collection uses the selected event's item and NPC identifiers, independent of the game's language. By default, 15 held items trigger a hand-in trip. Smaller batches are delivered after 45 seconds holding items, with fewer than 90 seconds remaining, at 80% progress or during the ending phase. After a hand-in, collection resumes if the event remains active. A batch is never treated as a fixed completion requirement. Attackers are handled before approaching the recipient.
+
+The batch size is configurable in **FATEs**. Collection and escort participation can also be disabled independently. Interactions are limited to objects associated with the selected FATE, with bounded attempts and timeouts. Unsupported dialogue flows stop rather than click arbitrary menu choices. These native flows are experimental and need supervised validation.
+
+Known large-group encounters are excluded by default. This is a maintained ID list, not a universal difficulty detector; add other unsuitable events to your ignore list. The gemstone counter sums observed increases during the session, excluding the starting balance. It cannot measure rewards lost to the currency cap or distinguish simultaneous gains and spending. The timer shows the currently active FATE's remaining time; there is no Faloop integration or respawn prediction in this release.
 
 For initial functional testing, select one familiar zone and a goal of one FATE, then observe the entire cycle. This helps validate behavior; it does not reduce or remove the account-policy risk. Follow the [validation checklist](VALIDATION.md) before relying on additional features.
 
@@ -103,13 +116,13 @@ English · 日本語 · Deutsch · Français · **Português (Brasil)** · Espa�
 
 ## Scope and limitations
 
-Only already-active combat FATEs are selected. Collection, escort and NPC-triggered events are outside the current scope. Completion means an observed successful end after participation; a disappearing FATE without confirmation does not count toward the return goal.
+Supported overworld rules include combat, collection, escort and defense. A preparing event is eligible only when it exposes a starter NPC. Event-specific mechanics or dialogue variants may still be unsupported. Completion means an observed successful end after participation; a disappearing FATE without confirmation does not count toward the return goal.
 
-Profiles, persistent history, job queues, repairs, consumables, voucher purchases, party coordination and time/inventory/equipment stop conditions are not implemented in 0.1. There are no GM detection or concealment features.
+Profiles, persistent history, job queues, repairs, consumables, voucher purchases, party coordination and time/inventory/equipment stop conditions are not implemented in 0.2. There are no GM detection or concealment features.
 
 ### Next milestones
 
-After validating the 0.1 combat/travel/stop cycle, the next planned FATE types are **collection** and **escort**. These need dedicated NPC interaction, item hand-in and objective-following behavior rather than simply enabling another filter. They are planned work, not features included in the current download.
+The next priority is live validation of collection hand-ins, NPC-started events and escorts, followed by fixes for individual event mechanics. External tracker integration remains a separate future investigation.
 
 ## Privacy and security
 
@@ -127,19 +140,19 @@ Requires **.NET SDK 10**, **PowerShell 7** and local **Dalamud API 15** developm
 ./build.ps1 -Dotnet 'C:/path/to/dotnet.exe'
 ```
 
-The script builds Release, runs the tests, inspects the assemblies and produces plugin/source ZIPs plus SHA-256 hashes in `artifacts/`. The SDK and packager are pinned to 15.0.0. Build-time package restoration may access package servers.
+The script builds Release, runs the tests, inspects the assemblies, prepares the matching catalog and produces plugin/source ZIPs plus SHA-256 hashes in `artifacts/`. The SDK and packager are pinned to 15.0.0. Build-time package restoration may access package servers.
 
 `src/FatePilot.Core` contains the game-independent session controller. `src/FatePilot` contains the UI and adapters. `tests/FatePilot.Tests` contains the behavioral and privacy checks. Exact external API names are centralized in `IntegrationIds.cs`.
 
-To prepare release metadata, run `./prepare-repository.ps1 -ReleaseDirectory './artifacts'`. It verifies the DLL/manifest version before writing `pluginmaster.json`; it does not publish anything itself. Publish the release ZIP before updating the public catalog.
+To regenerate release metadata separately, run `./prepare-repository.ps1 -ReleaseDirectory './artifacts' -Tag 'v0.2.0'`. It verifies the DLL/manifest version before writing `pluginmaster.json`; it does not publish anything itself. Publish the release ZIP before updating the public catalog.
 
 For bug reports, include versions, reproduction steps and expected/observed behavior. Review diagnostics before sharing them; character and account names are not required. Translation corrections are welcome.
 
 ## Support
 
-<p><a href="https://ko-fi.com/mokoena"><img src="src/FatePilot/Assets/cat.png" alt="Mokoena's cat" width="88" /></a></p>
+<p><a href="https://ko-fi.com/mokoena"><img src="src/FatePilot/Assets/cat.png" alt="Mokoena's cat" width="192" /></a></p>
 
-**[Buy my cat a treat](https://ko-fi.com/mokoena)** — optional support for the project and a very important snack budget.
+**[♥ Buy my cat a treat](https://ko-fi.com/mokoena)** — optional support for the project and a very important snack budget.
 
 ---
 
