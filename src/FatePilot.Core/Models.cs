@@ -1,0 +1,92 @@
+using System.Numerics;
+
+namespace FatePilot.Core;
+
+public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted }
+public enum EventState { Other, Preparing = 3, Running = 4, Ending = 5, Ended = 7, Failed = 8 }
+
+public sealed record Destination(uint TerritoryId, uint AetheryteId, string Name);
+public sealed record FateInfo(ushort Id, string Name, uint TerritoryId, EventState State, int Level,
+    int MaxLevel, int Progress, float SecondsLeft, Vector3 Position, float Radius, bool IsCombat, bool Bonus, long StartedAt);
+public readonly record struct FateKey(uint Territory, int Instance, ushort Id, long StartedAt);
+public sealed record EnemyInfo(ulong Id, ushort FateId, Vector3 Position, float Hitbox, bool TargetingPlayer);
+
+public sealed class RunOptions
+{
+    public List<Destination> Route { get; set; } = [];
+    public bool RotateInstances { get; set; } = true;
+    public bool UseMount { get; set; } = true;
+    public bool UseFlight { get; set; } = true;
+    public bool PreferBonus { get; set; } = true;
+    public int LevelAbovePlayer { get; set; } = 3;
+    public int MaximumProgress { get; set; } = 85;
+    public int MinimumSecondsLeft { get; set; } = 90;
+    public int IdleSeconds { get; set; } = 30;
+    public int ReturnAfterFates { get; set; } = 10;
+    public Destination? ReturnDestination { get; set; }
+    public List<ushort> ExcludedFates { get; set; } = [];
+    public bool UseTickets { get; set; }
+    public bool PayGilWhenTicketsRunOut { get; set; }
+    public int TicketMinimumFare { get; set; }
+    public int MaximumTeleportGil { get; set; }
+
+    public void Validate()
+    {
+        if (TicketMinimumFare < 0 || MaximumTeleportGil < 0)
+            throw new InvalidOperationException(L.T("Os limites de gastos não podem ser negativos."));
+        if (IdleSeconds < 10 || MinimumSecondsLeft < 0 || LevelAbovePlayer < 0 || MaximumProgress is < 1 or > 100 || ReturnAfterFates < 0)
+            throw new InvalidOperationException(L.T("Os filtros de FATEs contêm valores inválidos."));
+        if (ReturnAfterFates > 0 && ReturnDestination == null)
+            throw new InvalidOperationException(L.T("Escolha a cidade de retorno ou defina a meta de FATEs como zero."));
+        if (Route.Any(x => x.TerritoryId == 0 || x.AetheryteId == 0) || Route.Select(x => x.TerritoryId).Distinct().Count() != Route.Count)
+            throw new InvalidOperationException(L.T("Escolha um aetheryte por zona, sem repetir zonas."));
+    }
+}
+
+// Immutable snapshots: never retain Dalamud game-object wrappers across frames.
+public sealed record World
+{
+    public bool LoggedIn { get; init; }
+    public bool Dead { get; init; }
+    public bool Restricted { get; init; }
+    public bool Loading { get; init; }
+    public bool Occupied { get; init; }
+    public bool Casting { get; init; }
+    public bool InCombat { get; init; }
+    public bool Mounted { get; init; }
+    public bool Flying { get; init; }
+    public bool CanFly { get; init; }
+    public bool Synced { get; init; }
+    public ushort CurrentFate { get; init; }
+    public int Level { get; init; }
+    public uint Job { get; init; }
+    public uint Territory { get; init; }
+    public int Instance { get; init; }
+    public int InstanceCount { get; init; }
+    public bool CanChangeInstance { get; init; }
+    public Vector3 Position { get; init; }
+    public Vector3? NearbyAetheryte { get; init; }
+    public bool TravelBusy { get; init; }
+    public bool NavReady { get; init; }
+    public bool NavBusy { get; init; }
+    public string? NavError { get; init; }
+    public IReadOnlyList<FateInfo> Fates { get; init; } = [];
+    public IReadOnlyList<EnemyInfo> Enemies { get; init; } = [];
+}
+
+public interface IRuntime
+{
+    void Begin(RunOptions options);
+    void End();
+    void Move(Vector3 position, bool fly);
+    void StopMovement();
+    void Mount();
+    void Dismount();
+    void Sync();
+    void SetCombat(bool enabled);
+    void Target(ulong id);
+    void Teleport(Destination destination);
+    void ConfirmTeleport();
+    void ChangeInstance(int instance);
+    void Log(string message);
+}
