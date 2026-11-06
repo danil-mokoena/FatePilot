@@ -200,6 +200,54 @@ Test("Gemstone session counter counts observed gains, not the initial balance", 
     r.Tick(world with{Gemstones=110},3); r.Tick(world with{Gemstones=126},4);
     Assert(r.GemstonesEarned==32);
 });
+Test("Local conversation advances several pages and only its own confirmation", () =>
+{
+    var guard=new LocalDialogueGuard(); var lease=new InteractionLease(); lease.Begin(502,[0x801A0001],0);
+    for(var page=1;page<=5;page++)
+    {
+        var matched=guard.Observe(true,true,true,true,false,700,page);
+        Assert(matched && lease.Observe(page,true,default,default,false,0,matched)==InteractionStatus.Owned);
+    }
+    Assert(!guard.Observe(true,true,false,false,false,0,5.25));
+    Assert(guard.Observe(true,true,false,false,true,700,6));
+    Assert(!guard.Observe(true,true,false,false,true,701,6));
+    Assert(!guard.Observe(true,true,false,false,true,700,11));
+});
+Test("Local conversation never overrides another actor, speaker or populated event", () =>
+{
+    var guard=new LocalDialogueGuard();
+    Assert(!guard.Observe(true,true,false,false,true,700,1));
+    Assert(!guard.Observe(true,true,true,false,false,700,1));
+    Assert(!guard.Observe(true,false,true,true,false,700,1));
+    Assert(!guard.Observe(false,true,true,true,false,700,1));
+    Assert(!guard.Observe(true,true,true,true,false,0,1));
+    var lease=new InteractionLease(); lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(3,true,new(999,0x00040001),default,false,0,true)==InteractionStatus.Foreign);
+    lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(1,true,new(0xE0000000,0),default,false,0xE0000000,true)==InteractionStatus.Owned);
+    Assert(lease.Observe(15,true,default,default,false,0,true)==InteractionStatus.Expired);
+});
+Test("Conversation page transitions wait briefly without losing ownership", () =>
+{
+    var lease=new InteractionLease(); lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(1,true,default,default,false,0,true)==InteractionStatus.Owned);
+    Assert(lease.Observe(1.25,false,default,default,false)==InteractionStatus.Waiting);
+    Assert(lease.Observe(1.5,true,default,default,false,0,true)==InteractionStatus.Owned);
+    Assert(lease.Observe(2.5,false,default,default,false)==InteractionStatus.None);
+});
+Test("NPC conversation completion proceeds through sync to combat", () =>
+{
+    var pending=fate with{State=EventState.Preparing,CanStart=true,SecondsLeft=0,StartedAt=0,Position=Vector3.Zero};
+    var w=world with{Fates=[pending],Objectives=[new(501,1,ObjectiveRole.Starter,Vector3.Zero)],CurrentFate=1};
+    var (r,rt)=Started(w); for(var i=1;i<=5;i++) r.Tick(w,i);
+    for(var i=6;i<=10;i++) r.Tick(w with{OwnEventInteraction=true,Occupied=true,DialogueOpen=true},i);
+    Assert(rt.Advances==5 && r.IsRunning);
+    var running=w with{Fates=[pending with{State=EventState.Running,SecondsLeft=600,StartedAt=99}]};
+    r.Tick(running,11); r.Tick(running,12); Assert(rt.Syncs==1 && r.State==RunState.Syncing);
+    r.Tick(running with{Synced=true},13);
+    r.Tick(running with{Synced=true,Enemies=[new(99,1,Vector3.One,1,false)]},14);
+    Assert(r.State==RunState.Fighting && rt.LastTarget==99 && rt.CombatEnabled);
+});
 Test("Daivadipa and other known group bosses are excluded by default", () =>
 {
     foreach(var id in new ushort[]{196,506,1106,1432,1464,1763,1855,1871,1922})
@@ -218,10 +266,11 @@ Test("Collection can deliver its remaining items during the ending phase", () =>
     r.Tick(w with{Fates=[collect with{State=EventState.Ending,Progress=100,HeldItems=0,HandedIn=3}]},7);
     Assert(r.Completed==1);
 });
-Test("Bonus preference and nearest distance", () =>
+Test("Nearest FATE wins and bonus only breaks equal-distance ties", () =>
 {
     var bonus = fate with { Id=2, Bonus=true, Position=new(150,0,0) };
-    Assert(Selection.Choose(world with { Fates=[fate,bonus] }, Options(), new Dictionary<FateKey,double>(), 0)?.Id == 2);
+    Assert(Selection.Choose(world with { Fates=[fate,bonus] }, Options(), new Dictionary<FateKey,double>(), 0)?.Id == 1);
+    Assert(Selection.Choose(world with { Fates=[fate,bonus with{Position=fate.Position}] }, Options(), new Dictionary<FateKey,double>(), 0)?.Id == 2);
     var o=Options(); o.PreferBonus=false;
     Assert(Selection.Choose(world with { Fates=[fate,bonus] }, o, new Dictionary<FateKey,double>(), 0)?.Id == 1);
 });
@@ -337,6 +386,384 @@ Test("Unexpected loading stops before movement", () => { var (r,f)=Started(); r.
 Test("An unexpected dialog stops the session", () => { var (r,f)=Started(); r.Tick(world with { Occupied=true },1); Assert(!r.IsRunning && f.Ends==1); });
 Test("Other travel automation interrupts the session", () => { var (r,f)=Started(); r.Tick(world with { TravelBusy=true },1); Assert(r.State==RunState.Faulted && f.Ends==1); });
 
+Test("Earned gemstone goal excludes initial balance and returns without starting a FATE", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnAfterGemstones=20;
+    var initial=world with{Gemstones=1000}; var (r,rt)=Started(initial,o);
+    r.Tick(initial with{Gemstones=1020},1);
+    Assert(r.GemstonesEarned==20 && r.PendingReturnGoal==ReturnGoal.Gemstones && rt.Teleports.SequenceEqual(new[]{home}));
+});
+Test("Time goal waits for the current combat FATE and confirms return", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnAfterMinutes=1;
+    var (r,rt)=Started(o:o); var inside=Engage(r);
+    r.Tick(inside,60); Assert(r.PendingReturnGoal==ReturnGoal.Time && r.IsRunning && rt.Teleports.Count==0);
+    r.Tick(inside with{InCombat=false,Fates=[fate with{State=EventState.Ended,Progress=100}]},61);
+    r.Tick(world,62); Assert(rt.Teleports.Count==1);
+    r.Tick(world with{Loading=true},63);
+    r.Tick(world with{Territory=129},64); Assert(r.State==RunState.Finished && r.ElapsedSeconds==64);
+    r.Tick(world,100); Assert(r.ElapsedSeconds==64);
+});
+Test("A reached goal flushes a partial collection batch before returning", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnAfterMinutes=1;
+    var collect=fate with{Kind=FateKind.Collection,HeldItems=2,Position=Vector3.Zero};
+    var npc=new ObjectiveActor(502,1,ObjectiveRole.Recipient,Vector3.Zero);
+    var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[npc]};
+    var (r,rt)=Started(w,o);
+    for(var i=1;i<=6;i++) r.Tick(w,i);
+    Assert(rt.Interactions.Count==0);
+    r.Tick(w,60); Assert(rt.Interactions.Count==1 && rt.Teleports.Count==0 && r.PendingReturnGoal==ReturnGoal.Time);
+    r.Tick(w with{Fates=[collect with{HeldItems=0,HandedIn=2}]},61);
+    Assert(rt.Teleports.Count==0 && r.IsRunning);
+    r.Tick(w with{Fates=[collect with{HeldItems=0,HandedIn=2,State=EventState.Ended,Progress=100}]},62);
+    r.Tick(w,63); Assert(rt.Teleports.Count==1 && r.Completed==1);
+});
+Test("First reached goal remains latched when another becomes true", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnAfterMinutes=1; o.ReturnAfterGemstones=10;
+    var (r,rt)=Started(o:o); var w=Engage(r);
+    r.Tick(w,60); r.Tick(w with{Gemstones=20},61);
+    Assert(r.PendingReturnGoal==ReturnGoal.Time && rt.Teleports.Count==0);
+    r.Stop(); r.Start(o,world,100); Assert(r.PendingReturnGoal==ReturnGoal.None && r.ElapsedSeconds==0 && r.GemstonesEarned==0);
+});
+Test("Currency reserve uses the live cap and deterministic simultaneous-goal priority", () =>
+{
+    var o=Options(); o.AvoidGemstoneCap=true; o.GemstoneCapReserve=200; o.ReturnAfterGemstones=10; o.ReturnAfterMinutes=1;
+    Assert(SessionGoals.Evaluate(o,1,10,60,1299,1500)==ReturnGoal.Fates);
+    Assert(SessionGoals.Evaluate(o,1,10,60,1300,1500)==ReturnGoal.CurrencyCap);
+    Assert(SessionGoals.Evaluate(o,0,0,0,1300,2000)==ReturnGoal.None);
+    var (r,rt)=Started(world with{Gemstones=1300,GemstoneCap=1500},o);
+    r.Tick(world with{Gemstones=1300,GemstoneCap=1500},1);
+    Assert(rt.Teleports.Count==1 && r.PendingReturnGoal==ReturnGoal.CurrencyCap);
+});
+Test("Unknown currency cap and oversized reserves refuse cap protection", () =>
+{
+    var o=Options(); o.AvoidGemstoneCap=true;
+    var rt=new Fake(); var r=new Runner(rt); r.Start(o,world,0); Assert(r.State==RunState.Faulted);
+    o.GemstoneCapReserve=1500; r.Start(o,world with{GemstoneCap=1500},0); Assert(r.State==RunState.Faulted);
+    o.GemstoneCapReserve=200; r.Start(o,world with{GemstoneCap=1500},0); Assert(r.IsRunning);
+    r.Tick(world,1); Assert(r.State==RunState.Faulted && rt.Teleports.Count==0);
+});
+Test("All goal types require a destination and reject invalid numeric configuration", () =>
+{
+    Throws(()=>new RunOptions{ReturnAfterFates=0,ReturnAfterGemstones=1}.Validate());
+    Throws(()=>new RunOptions{ReturnAfterFates=0,ReturnAfterMinutes=1}.Validate());
+    Throws(()=>new RunOptions{ReturnAfterFates=0,AvoidGemstoneCap=true}.Validate());
+    Throws(()=>new RunOptions{ReturnDestination=home,ReturnAfterMinutes=-1}.Validate());
+    Throws(()=>new RunOptions{ReturnDestination=home,ReturnAfterGemstones=-1}.Validate());
+    Throws(()=>new RunOptions{ReturnDestination=home,GemstoneCapReserve=-1}.Validate());
+});
+Test("Reaching time goal during zone travel finishes that transition then returns", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnAfterMinutes=1; o.Route=[zone2];
+    var (r,rt)=Started(o:o); r.Tick(world,1); r.Tick(world with{Loading=true},60);
+    r.Tick(world with{Territory=1001},61); r.Tick(world with{Territory=1001},62);
+    Assert(rt.Teleports.SequenceEqual(new[]{zone2,home}) && r.PendingReturnGoal==ReturnGoal.Time && rt.Instances.Count==0);
+});
+Test("Tracker world changes with visits and clears during transitions", () =>
+{
+    var first=TrackerWorld.FromCurrent(78,"Behemoth","Primal",true,false);
+    var visited=TrackerWorld.FromCurrent(93,"Excalibur","Primal",true,false);
+    Assert(first?.Name=="Behemoth" && visited?.Name=="Excalibur" && visited.Id!=first.Id);
+    Assert(TrackerWorld.FromCurrent(93,"Excalibur","Primal",true,true)==null);
+    Assert(TrackerWorld.FromCurrent(0,"","",true,false)==null);
+    Assert(TrackerWorld.FromCurrent(93,"Excalibur","Primal",false,false)==null);
+});
+
+Test("Nearby NPC-started FATE is not ranked below an already running event", () =>
+{
+    var pending=fate with{Id=2,State=EventState.Preparing,CanStart=true,Position=new(10,0,0),SecondsLeft=0};
+    Assert(Selection.Choose(world with{Fates=[fate with{Bonus=true},pending]},Options(),new Dictionary<FateKey,double>(),0)?.Id==2);
+});
+Test("FATE NPC binding resolves both server entity IDs and local event-object handles", () =>
+{
+    var npc=new FateNpcCandidate(0x100001234,0xE0000000,0x1234,20,false,true,true,false,0,Vector3.Zero,1);
+    Assert(FateNpcBinding.Resolve(0x1234,0,Vector3.Zero,50,[npc])?.Id==npc.Id);
+    Assert(FateNpcBinding.Resolve(55,0,Vector3.Zero,50,[npc with{EntityId=55}])?.Id==npc.Id);
+});
+Test("FATE NPC fallback requires a unique native event association", () =>
+{
+    var npc=new FateNpcCandidate(42,42,5,20,true,true,true,false,7,Vector3.Zero,1);
+    Assert(FateNpcBinding.Resolve(0,7,Vector3.Zero,50,[npc])?.Id==42);
+    Assert(FateNpcBinding.Resolve(0,7,Vector3.Zero,50,[npc with{Linked=false}])==null);
+    Assert(FateNpcBinding.Resolve(0,7,Vector3.Zero,50,[npc,npc with{Id=43}])==null);
+    Assert(FateNpcBinding.Resolve(0,7,Vector3.Zero,50,[npc,npc with{Id=43,Marker=8}])?.Id==42);
+});
+Test("FATE NPC binding rejects unavailable, distant, hostile or ambiguous fallback actors", () =>
+{
+    var npc=new FateNpcCandidate(42,42,5,20,true,true,true,false,7,Vector3.Zero,1);
+    foreach(var candidate in new[]{npc with{Targetable=false},npc with{Alive=false},npc with{Hostile=true},npc with{Position=new(1000,0,0)}})
+        Assert(FateNpcBinding.Resolve(0,7,Vector3.Zero,50,[candidate])==null);
+    Assert(FateNpcBinding.Resolve(42,7,Vector3.Zero,50,[npc,npc with{Id=43}])==null);
+});
+Test("Faloop link follows current world and has a generic fallback", () =>
+{
+    Assert(FaloopLink.ForWorld(new(78,"Behemoth","Primal"))=="https://faloop.app/behemoth/fate");
+    Assert(FaloopLink.ForWorld(new(93,"Excalibur","Primal"))=="https://faloop.app/excalibur/fate");
+    Assert(FaloopLink.ForWorld(null)=="https://faloop.app/fate");
+});
+Test("Faloop world names cannot inject a host, path, query or fragment", () =>
+{
+    foreach(var name in new[]{"","a",new string('a',33),"//evil.example","x@evil.example","Behemoth/fate","Behemoth?name=x","Behemoth#x","%2f","Behemoth\\x","Behemoth\n","Ｂehemoth","../"})
+        Assert(FaloopLink.ForWorld(new(1,name,"DC"))=="https://faloop.app/fate",name);
+    Assert(FaloopLink.ForWorld(new(0,"Behemoth","Primal"))=="https://faloop.app/fate");
+});
+Test("Live route edit preserves the current FATE and session counters", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.Route=[zone1];
+    var (r,rt)=Started(o:o); var inside=Engage(r);
+    var changed=Options(); changed.ReturnAfterFates=0; changed.Route=[zone2]; changed.UseTickets=true;
+    r.QueueOptions(changed); changed.Route.Clear();
+    r.Tick(inside with{Gemstones=12},7);
+    Assert(r.State==RunState.Fighting && r.HasPendingOptions && rt.Settings.Count==0 && rt.Teleports.Count==0);
+    var done=inside with{InCombat=false,Gemstones=12,Fates=[fate with{State=EventState.Ended,Progress=100}]};
+    r.Tick(done,8); r.Tick(done,9);
+    Assert(r.Completed==1 && r.GemstonesEarned==12 && !r.HasPendingOptions && rt.Settings.Single().UseTickets);
+    Assert(rt.Teleports.SequenceEqual(new[]{zone2}) && rt.Ends==0);
+});
+Test("Latest live edit wins and malformed edits leave the session running", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; var (r,rt)=Started(o:o);
+    var changed=Options(); changed.ReturnAfterFates=0; changed.Route=[zone2];
+    r.QueueOptions(changed); changed.Route=[zone1,zone2]; r.QueueOptions(changed);
+    r.Tick(world,1); Assert(rt.Settings.Single().Route.SequenceEqual(new[]{zone1,zone2}) && rt.Teleports.Count==0);
+    changed.Route=[zone1,zone1]; r.QueueOptions(changed);
+    Assert(!r.HasPendingOptions && r.OptionsError!=null && r.IsRunning);
+});
+Test("Runtime refusal of live settings preserves previous options and does not stop combat", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; var (r,rt)=Started(o:o); rt.FailSettings=true;
+    var changed=Options(); changed.ReturnAfterFates=0; changed.Route=[zone2]; r.QueueOptions(changed);
+    r.Tick(world,1);
+    Assert(r.IsRunning && r.OptionsError!=null && rt.Teleports.Count==0 && r.Selected?.Id==fate.Id);
+});
+Test("Live settings wait for teleport arrival and do not change the accepted destination", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.Route=[zone2]; var (r,rt)=Started(o:o); r.Tick(world,1);
+    var changed=Options(); changed.ReturnAfterFates=0; changed.Route=[zone1]; r.QueueOptions(changed);
+    r.Tick(world with{Loading=true},2); Assert(rt.Settings.Count==0);
+    r.Tick(world with{Territory=1001},3); Assert(rt.Settings.Count==0 && rt.Teleports.SequenceEqual(new[]{zone2}));
+    r.Tick(world with{Territory=1001},4); Assert(rt.Settings.Count==1 && rt.Teleports.SequenceEqual(new[]{zone2,zone1}));
+});
+Test("Live filters and goals apply before the next FATE selection", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; var (r,rt)=Started(o:o);
+    var changed=Options(); changed.ReturnAfterFates=0; changed.ExcludedFates=[fate.Id]; r.QueueOptions(changed);
+    r.Tick(world,1); Assert(r.Selected==null && r.State==RunState.Waiting);
+    changed.ReturnAfterMinutes=1; r.QueueOptions(changed); r.Tick(world,60);
+    Assert(r.PendingReturnGoal==ReturnGoal.Time && rt.Teleports.Single()==home);
+});
+Test("Live instance preference updates without rebuilding the session", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.Route=[zone1,zone2]; var empty=world with{Fates=[]};
+    var (r,rt)=Started(empty,o); r.Tick(empty,1);
+    o.RotateInstances=false; r.QueueOptions(o); r.Tick(empty,12);
+    Assert(rt.Teleports.Single()==zone2 && rt.Instances.Count==0 && rt.Ends==0);
+});
+Test("Combat on the way to a FATE targets only attackers then resumes", () =>
+{
+    var (r,rt)=Started(); r.Tick(world,1); r.Tick(world,2);
+    var attacked=world with{InCombat=true,Enemies=[new(77,0,Vector3.Zero,1,true),new(88,0,Vector3.One,1,false)]};
+    r.Tick(attacked,3);
+    Assert(r.State==RunState.Defending && rt.LastTarget==77 && rt.CombatEnabled && rt.Ends==0 && r.Completed==0);
+    r.Tick(world,4); Assert(r.State==RunState.Mounting && !rt.CombatEnabled);
+    r.Tick(world,5); Assert(r.State==RunState.Moving && r.Selected?.Id==fate.Id);
+});
+Test("Outside-FATE combat at sync recovers instead of terminating", () =>
+{
+    var (r,rt)=Started(); r.Tick(world,1); r.Tick(world,2);
+    var close=world with{Position=fate.Position}; r.Tick(close,3); r.Tick(close,4);
+    Assert(r.State==RunState.Syncing);
+    r.Tick(close with{InCombat=true,Enemies=[new(77,0,fate.Position,1,true)]},5);
+    Assert(r.State==RunState.Defending && rt.LastTarget==77 && r.IsRunning);
+});
+Test("Defense waits for targetable attackers and retains a finite deadline", () =>
+{
+    var (r,rt)=Started(); r.Tick(world,1);
+    var attacked=world with{InCombat=true,Enemies=[new(88,0,Vector3.One,1,false)]};
+    r.Tick(attacked,2); Assert(r.IsRunning && rt.LastTarget==0 && !rt.CombatEnabled);
+    r.Tick(attacked,123); Assert(r.State==RunState.Faulted);
+});
+Test("Defense keeps known group-boss exclusions", () =>
+{
+    var (r,rt)=Started(); r.Tick(world,1);
+    r.Tick(world with{InCombat=true,Enemies=[new(88,1855,Vector3.Zero,1,true)]},2);
+    Assert(!r.IsRunning && rt.LastTarget==0);
+});
+Test("Forlorn priority preempts a closer attacker and returns to normal targeting", () =>
+{
+    foreach(var id in new uint[]{6737,6738})
+    {
+        var (r,rt)=Started(); var inside=Engage(r);
+        var maiden=new EnemyInfo(500,1,fate.Position+new Vector3(15,0,0),1,false){NameId=id};
+        r.Tick(inside with{Enemies=[new(99,1,fate.Position,1,true),maiden]},7);
+        Assert(rt.LastTarget==500 && rt.CombatEnabled && r.State==RunState.Fighting);
+        r.Tick(inside,8); Assert(rt.LastTarget==99 && r.IsRunning);
+    }
+});
+Test("Forlorn takes priority over collection hand-ins and escort movement", () =>
+{
+    foreach(var kind in new[]{FateKind.Collection,FateKind.Escort})
+    {
+        var f=fate with{Kind=kind,HeldItems=15};
+        var w=world with{Fates=[f],Position=fate.Position,CurrentFate=1,Synced=true,Objectives=[new(501,1,ObjectiveRole.Recipient,fate.Position)]};
+        var (r,rt)=Started(w); for(var i=1;i<=4;i++)r.Tick(w,i);
+        r.Tick(w with{Enemies=[new EnemyInfo(500,0,fate.Position,1,false){NameId=6737}]},5);
+        r.Tick(w with{Enemies=[new EnemyInfo(500,0,fate.Position,1,false){NameId=6737}]},6);
+        Assert(rt.LastTarget==500 && rt.CombatEnabled && rt.Interactions.Count==0);
+    }
+});
+Test("Forlorn matching rejects other FATEs, unrelated names and distant unassigned enemies", () =>
+{
+    foreach(var maiden in new[]{new EnemyInfo(500,2,fate.Position,1,false){NameId=6737},new(500,0,new(999,0,0),1,false){NameId=6737},new(500,0,fate.Position,1,false){NameId=12349}})
+    {
+        var (r,rt)=Started(); var inside=Engage(r);
+        r.Tick(inside with{Enemies=[new(99,1,fate.Position,1,false),maiden]},7);
+        Assert(rt.LastTarget==99);
+    }
+});
+
+RunOptions GreensOptions(int threshold=10,int target=99) => new()
+{
+    Route=[zone1], ReturnDestination=home, ReturnAfterFates=0, UseMount=false,
+    RestockGreens=true, GreensThreshold=threshold, GreensTarget=target, GreensGilLimit=100000,
+};
+(Runner Runner,Fake Runtime,World Shop) AtGreensShop(RunOptions? options=null,int count=10)
+{
+    var w=world with{GreensInventory=new(true,count,999,100000)};
+    var (r,rt)=Started(w,options??GreensOptions());
+    r.Tick(w,1); Assert(rt.Teleports.SequenceEqual(new[]{GreensRestock.VendorCity}));
+    r.Tick(w with{Loading=true},2);
+    var shop=w with{Territory=129,Position=GreensRestock.VendorPosition,GreensVendor=new(700,GreensRestock.VendorPosition)};
+    r.Tick(shop,3); r.Tick(shop,4); Assert(rt.ShopOpens==1);
+    r.Tick(shop with{GreensShop=GreensShopState.Opening,Occupied=true,DialogueOpen=true},5); Assert(rt.ShopAdvances==1);
+    shop=shop with{GreensShop=GreensShopState.Ready,Occupied=true,DialogueOpen=true};
+    r.Tick(shop,6); return (r,rt,shop);
+}
+Test("Greens trigger includes zero, one and user-selected stock thresholds", () =>
+{
+    foreach(var threshold in new[]{0,1,10,20,35,99})
+    {
+        var o=GreensOptions(threshold,Math.Max(100,threshold+1));
+        var (r,rt)=Started(world with{GreensInventory=new(true,threshold,999,100000)},o);
+        r.Tick(world with{GreensInventory=new(true,threshold,999,100000)},1);
+        Assert(rt.Teleports.Count==1);
+        (r,rt)=Started(world with{GreensInventory=new(true,threshold+1,999,100000)},o);
+        r.Tick(world with{GreensInventory=new(true,threshold+1,999,100000)},1);
+        Assert(rt.Teleports.Count==0 && r.Selected!=null);
+    }
+});
+Test("Greens restock is opt-in and rejects invalid targets or missing return route", () =>
+{
+    var (r,rt)=Started(world with{GreensInventory=new(true,0,999,100000)});
+    r.Tick(world,1); Assert(rt.Teleports.Count==0);
+    var o=GreensOptions(); o.GreensTarget=o.GreensThreshold; Throws(o.Validate);
+    o=GreensOptions(); o.GreensGilLimit=0; Throws(o.Validate);
+    o=GreensOptions(); o.Route=[]; Throws(o.Validate);
+    o=GreensOptions(999,1000); Throws(o.Validate);
+});
+Test("Greens budget, inventory space and loading are checked before departure", () =>
+{
+    foreach(var stock in new[]{new GreensInventory(true,10,2,100000),new(true,10,999,1),new(false,0,0,0)})
+    {
+        var (r,rt)=Started(world with{GreensInventory=stock},GreensOptions());
+        r.Tick(world with{GreensInventory=stock},1); Assert(r.State==RunState.Faulted && rt.Teleports.Count==0);
+    }
+    var o=GreensOptions(); o.GreensGilLimit=100;
+    var (runner,runtime)=Started(world with{GreensInventory=new(true,10,999,100000)},o);
+    runner.Tick(world with{GreensInventory=new(true,10,999,100000)},1);
+    Assert(runner.State==RunState.Faulted && runtime.Teleports.Count==0);
+});
+Test("Greens full trip confirms inventory and gil then resumes its original zone", () =>
+{
+    var (r,rt,s)=AtGreensShop(); r.Tick(s,7);
+    Assert(rt.Purchases.Count==1 && rt.Purchases[0].Quantity==89 && r.GreensGilCommitted==3204);
+    r.Tick(s with{GreensShop=GreensShopState.Busy},8); Assert(rt.Purchases.Count==1);
+    s=s with{GreensInventory=new(true,99,910,96796)};
+    r.Tick(s,9); r.Tick(s,10); Assert(rt.ShopCloses==1);
+    r.Tick(s with{GreensShop=GreensShopState.Closed,Occupied=false,DialogueOpen=false},11);
+    Assert(rt.Teleports.SequenceEqual(new[]{GreensRestock.VendorCity,zone1}));
+    r.Tick(s with{Loading=true},12);
+    var back=world with{GreensInventory=s.GreensInventory}; r.Tick(back,13); r.Tick(back,14);
+    Assert(r.Selected?.Id==fate.Id && r.IsRunning && rt.Purchases.Count==1 && r.GreensGilCommitted==3204);
+});
+Test("Greens buys bounded batches and never repeats an unconfirmed purchase", () =>
+{
+    var (r,rt,s)=AtGreensShop(GreensOptions(10,200)); r.Tick(s,7);
+    Assert(rt.Purchases.Single().Quantity==99);
+    for(var i=8;i<=12;i++) r.Tick(s,i);
+    Assert(rt.Purchases.Count==1);
+    r.Tick(s with{GreensInventory=new(true,109,900,96436)},13);
+    Assert(rt.Purchases.Count==2 && rt.Purchases[1].Quantity==91 && r.GreensGilCommitted==6840);
+});
+Test("Greens receipt tolerates separate gil and item updates but not a mismatch", () =>
+{
+    var p=new GreensPurchase(10,5,1000,0);
+    Assert(p.Observe(new(true,5,999,640),1)==PurchaseResult.Pending);
+    Assert(p.Observe(new(true,15,999,1000),1)==PurchaseResult.Pending);
+    Assert(p.Observe(new(true,15,999,640),2)==PurchaseResult.Confirmed);
+    Assert(p.Observe(new(true,16,999,640),2)==PurchaseResult.Mismatch);
+    Assert(p.Observe(new(true,15,999,639),2)==PurchaseResult.Mismatch);
+    Assert(p.Observe(new(true,5,999,1000),15)==PurchaseResult.TimedOut);
+});
+Test("Greens transaction timeout stops without buying again", () =>
+{
+    var (r,rt,s)=AtGreensShop(); r.Tick(s,7); r.Tick(s,22); r.Tick(s,23);
+    Assert(r.State==RunState.Faulted && rt.Purchases.Count==1 && rt.Teleports.Count==1);
+});
+Test("Foreign shop context and early shop closure stop restocking", () =>
+{
+    foreach(var state in new[]{GreensShopState.Foreign,GreensShopState.Closed,GreensShopState.Failed})
+    {
+        var (r,rt,s)=AtGreensShop(); r.Tick(s with{GreensShop=state},7);
+        Assert(!r.IsRunning && rt.Purchases.Count==0);
+    }
+});
+Test("A session goal cancels unsent restocking and returns home", () =>
+{
+    var o=GreensOptions(); o.ReturnAfterMinutes=1;
+    var (r,rt,s)=AtGreensShop(o); r.Tick(s,60); Assert(rt.Purchases.Count==0 && rt.ShopCloses==1);
+    r.Tick(s with{GreensShop=GreensShopState.Closed,Occupied=false,DialogueOpen=false},61);
+    Assert(rt.Teleports.SequenceEqual(new[]{GreensRestock.VendorCity,home}));
+});
+Test("A goal during a purchase waits for its receipt then stops buying", () =>
+{
+    var o=GreensOptions(10,200); o.ReturnAfterGemstones=10;
+    var (r,rt,s)=AtGreensShop(o); r.Tick(s,7);
+    r.Tick(s with{Gemstones=10},8); Assert(rt.ShopCloses==0 && rt.Purchases.Count==1);
+    s=s with{Gemstones=10,GreensInventory=new(true,109,900,96436)};
+    r.Tick(s,9); Assert(rt.ShopCloses==1 && rt.Purchases.Count==1);
+});
+Test("Low greens waits until the active FATE is over", () =>
+{
+    var stocked=world with{GreensInventory=new(true,100,999,100000)};
+    var (r,rt)=Started(stocked,GreensOptions());
+    r.Tick(stocked,1); r.Tick(stocked,2);
+    var inside=stocked with{Position=fate.Position,CurrentFate=1,Synced=true};
+    r.Tick(inside,3); r.Tick(inside,4); r.Tick(inside,5);
+    inside=inside with{GreensInventory=new(true,0,999,100000),InCombat=true,Enemies=[new(99,1,fate.Position,1,false)]};
+    r.Tick(inside,6); Assert(rt.Teleports.Count==0 && r.State==RunState.Fighting);
+    inside=inside with{InCombat=false,Fates=[fate with{State=EventState.Ended,Progress=100}]};
+    r.Tick(inside,7); r.Tick(inside,8); Assert(rt.Teleports.Count==1);
+});
+Test("Stop and death prevent further restock actions", () =>
+{
+    var (r,rt,s)=AtGreensShop(); r.Stop(); r.Tick(s,7); Assert(rt.Purchases.Count==0);
+    (r,rt,s)=AtGreensShop(); r.Tick(s with{Dead=true},7); Assert(rt.Purchases.Count==0 && !r.IsRunning);
+});
+Test("Restock opening and navigation have finite deadlines", () =>
+{
+    var (r,rt,s)=AtGreensShop();
+    // Opening an unrelated interaction during city travel is not adopted.
+    var o=GreensOptions(); var w=world with{GreensInventory=new(true,0,999,100000)};
+    (r,rt)=Started(w,o); r.Tick(w,1); r.Tick(w with{Loading=true},2);
+    r.Tick(w with{Territory=129},3); r.Tick(w with{Territory=129,Occupied=true,DialogueOpen=true},4);
+    Assert(!r.IsRunning && rt.Purchases.Count==0);
+    (r,rt)=Started(w,o); r.Tick(w,1); r.Tick(w with{Loading=true},2);
+    r.Tick(w with{Territory=129},3); r.Tick(w with{Territory=129},34); Assert(r.State==RunState.Faulted);
+});
+
 if (args.Length > 0)
 {
     Test("Every language has all keys and matching format placeholders", () =>
@@ -359,7 +786,7 @@ if (args.Length > 0)
 }
 if (args.Length > 2)
 {
-    Test("Source privacy guard and click-only donation link", () => PrivacyAudit.Source(args[1]));
+    Test("Source privacy guard and click-only fixed browser links", () => PrivacyAudit.Source(args[1]));
     Test("Compiled assembly capabilities and bundled assets", () => PrivacyAudit.Binary(args[2]));
     Test("Every literal UI and status key has a translation", () => PrivacyAudit.LocalizationCoverage(args[1]));
 }
@@ -384,12 +811,16 @@ sealed class Fake : IRuntime
     public readonly List<Destination> Teleports=[];
     public readonly List<int> Instances=[];
     public void Begin(RunOptions o) { if(FailBegin) throw new InvalidOperationException("partial setup failure"); }
+    public readonly List<RunOptions> Settings = [];
+    public bool FailSettings;
+    public void UpdateOptions(RunOptions o) { if(FailSettings) throw new InvalidOperationException("invalid destination"); Settings.Add(o); }
     public void End()=>Ends++;
     public void Move(Vector3 p,bool fly) { Moves++; LastMove=p; }
     public void StopMovement() { }
     public void Mount() { }
     public void Dismount() { }
-    public void Sync() { }
+    public int Syncs;
+    public void Sync() { Syncs++; }
     public void SetCombat(bool enabled) { if(enabled&&FailCombat) throw new InvalidOperationException("IPC gone"); CombatEnabled=enabled; }
     public void Target(ulong id) { LastTarget=id; }
     public void Teleport(Destination d)=>Teleports.Add(d);
@@ -399,4 +830,10 @@ sealed class Fake : IRuntime
     public void Interact(ObjectiveActor actor) => Interactions.Add(actor);
     public void AdvanceEventInteraction() => Advances++;
     public void CancelEventInteraction() { }
+    public int ShopOpens, ShopAdvances, ShopCloses;
+    public readonly List<GreensPurchase> Purchases=[];
+    public void OpenGreensShop(VendorActor actor) => ShopOpens++;
+    public void AdvanceGreensShop() => ShopAdvances++;
+    public void BuyGreens(GreensPurchase purchase) => Purchases.Add(purchase);
+    public void CloseGreensShop() => ShopCloses++;
 }
