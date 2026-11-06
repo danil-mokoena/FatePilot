@@ -1,5 +1,15 @@
 # Experimental build validation
 
+## 0.3 experimental validation
+
+No 0.3 game-client validation has been performed. The user reported NPC failures on 0.2.1: Salty Showdown timed out after 60 seconds without an interaction request; Panaq Attack sent an interaction but stopped after three seconds with both event IDs empty and a visible Talk window. A stopped runner cannot subsequently sync or engage a manually started event.
+
+105 tests pass with zero compile warnings/errors. Coverage includes the previous controller checks, goal accounting, cap reserve, current-world changes, fixed-origin URL construction, verified NPC binding, multi-page local dialogue and confirmation ownership, dialogue-to-sync-to-combat, nearest-first selection, Forlorn priority, defense outside FATEs, live settings updates, and bounded Greens shopping with receipt confirmation and resumption. All six translation catalogs have matching keys and placeholders. These are simulations and static checks, not successful native game actions.
+
+Still to test in game: NPC lookup and all dialogue pages/confirmation, automatic sync after activation, Forlorn spawning mid-combat or during collection, outside-FATE defense/resumption, edits during a FATE and teleport, complete Greens purchase/return cycle, cap readout/goals, and UI bars/translations at different scales. The public Faloop link `https://faloop.app/behemoth/fate` was verified in a browser: it selected Behemoth and normalized the address to `/fate`. Native current-world mapping across visits still needs in-game validation. No supported public report API has been verified; timers are not imported.
+
+Validate locally with `./build.ps1 -ValidateOnly`; the following section records the released 0.2.1 baseline.
+
 ## Completed outside the game
 
 - Release compilation: zero errors and zero warnings.
@@ -9,7 +19,7 @@
 
 ## Pending: live client
 
-The user reported that initial combat works in 0.1.0. In 0.2.0, the diagnostic sequence for Lay Off the Horns reached NPC activation and immediately stopped as an unrelated interaction. The user then started the event manually. Version 0.2.1 changes the pending-context and mount/dismount handling; those fixes still need a live retest. Simulations do not establish that a native interaction succeeded.
+The user reported initial combat working, but subsequent NPC tests on 0.2.1 still failed as described above. Version 0.3 adds object-handle/FATE-association binding and scoped local dialogue recognition. Retest without manual clicks; simulations do not establish that a native interaction succeeded.
 
 The following is a test plan, not a list of observed in-game results. Supervised testing helps find functional defects; it does not remove the account-policy risk described in the README.
 

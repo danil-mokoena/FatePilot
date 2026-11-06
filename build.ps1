@@ -1,6 +1,7 @@
 param(
     [string]$Dotnet = 'dotnet',
-    [string]$OutputDirectory = (Join-Path $PSScriptRoot 'artifacts')
+    [string]$OutputDirectory = (Join-Path $PSScriptRoot 'artifacts'),
+    [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
@@ -20,6 +21,9 @@ $manifest = Get-Content -LiteralPath (Join-Path $binaryRoot 'FatePilot.json') -R
 if ($manifest.Author -ne 'Mokoena' -or $manifest.DalamudApiLevel -ne 15 -or $manifest.AcceptsFeedback -ne $false) { throw 'Unexpected manifest.' }
 $version = ([Version]$manifest.AssemblyVersion).ToString(3)
 if ($manifest.IconUrl -ne 'https://raw.githubusercontent.com/danil-mokoena/FatePilot/main/src/FatePilot/Assets/icon.png') { throw 'Missing or unexpected installer icon.' }
+if ($ValidateOnly) { Write-Output ('Validated without packaging or changing the catalog: ' + $outputRoot); return }
+$projectXml = [xml](Get-Content -LiteralPath $pluginProject -Raw)
+if ([string]$projectXml.Project.PropertyGroup.Version -match '-dev') { throw 'Development preview: use -ValidateOnly. Do not package or update the catalog until release validation is complete.' }
 
 # Stage only explicitly selected runtime files; never bundle installed dependencies.
 $packageRoot = Join-Path $outputRoot "FatePilot-$version"
@@ -28,7 +32,7 @@ $runtimeNames = @('FatePilot.dll', 'FatePilot.Core.dll', 'FatePilot.deps.json', 
 foreach ($name in $runtimeNames) { Copy-Item -LiteralPath (Join-Path $binaryRoot $name) -Destination (Join-Path $packageRoot $name) -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $packageRoot 'images') | Out-Null
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'src/FatePilot/Assets/icon.png') -Destination (Join-Path $packageRoot 'images/icon.png') -Force
-$docNames = @('README.md', 'SECURITY.md', 'INTEGRATIONS.md', 'VALIDATION.md')
+$docNames = @('README.md', 'SECURITY.md', 'INTEGRATIONS.md', 'VALIDATION.md', 'FALOOP-DESIGN.md')
 foreach ($name in $docNames) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $packageRoot $name) -Force }
 
 $pluginZip = Join-Path $outputRoot "FatePilot-$version-plugin.zip"
