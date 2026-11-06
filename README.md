@@ -5,7 +5,11 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.3.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.3.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 0.3.1
+
+NPC dialogue ownership now reads the speaker directly from the visible Talk window. The previous cached speaker field could remain empty, causing Panaq Attack to stop on its first dialogue page despite interacting with the correct NPC. The verified conversation can advance through multiple pages and its matching Yes confirmation, then proceed to level sync and combat. This requires no additional dialogue plugin. Native behavior still needs in-game confirmation.
 
 ### New in 0.3
 
@@ -20,7 +24,7 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
 - Optional Gysahl Greens threshold/target restocking with a separate gil budget and confirmed purchases from a verified Limsa Lominsa vendor. Finish the current FATE, replenish supplies and resume the route. This does not summon a chocobo.
 - A Faloop tab showing the **current** world and data center, including visits. Its click-only browser link selects that world on the website. Live reports and timers are not imported.
 
-105 local tests cover the controller, translations and privacy checks. Native NPC interactions, shop purchases and the other new flows still require in-game validation. [Faloop design and remaining work](FALOOP-DESIGN.md) explains the companion link and the supported read API still to be verified for future report retrieval.
+107 local tests cover the controller, translations and privacy checks. Native NPC interactions, shop purchases and the other new flows still require in-game validation. [Faloop design and remaining work](FALOOP-DESIGN.md) explains the companion link and the supported read API still to be verified for future report retrieval.
 
 Validate development without creating release ZIPs or changing the catalog: `./build.ps1 -ValidateOnly`. Use `-Dotnet` for a local SDK path if needed.
 
@@ -30,7 +34,7 @@ Validate development without creating release ZIPs or changing the catalog: `./b
 > FATE farming is associated with botting and RMT in [community discussions](https://www.reddit.com/r/ffxivdiscussion/comments/12ki4a0/fate_botting_in_endwalker_zones/). Claims that FATEs receive particular enforcement priority are community perceptions, not a confirmed official policy. FatePilot offers no protection against detection or account penalties. You are responsible for the decision to use it.
 
 > [!IMPORTANT]
-> **This is an experimental build.** Initial combat has been reported working by a user. NPC activation still failed in 0.2.1: Salty Showdown timed out without an interaction attempt, and Panaq Attack stopped after opening a conversation whose event fields were empty. Version 0.3 addresses both paths, but the corrections have not yet been confirmed in game. Tests simulate controller behavior; they do not execute native adapters in a live client.
+> **This is an experimental build.** Combat and resuming after outside-FATE defense have been observed in user diagnostics on 0.3.0. NPC activation still stopped on the first Talk page because the speaker was not recognized. Version 0.3.1 changes that reader; its native behavior is not yet confirmed in game. Tests simulate controller behavior and do not execute native adapters in a live client.
 
 ### Fixed in 0.2.1
 

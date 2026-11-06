@@ -1,6 +1,14 @@
 # Experimental build validation
 
-## 0.3 experimental validation
+## 0.3.1 dialogue hotfix
+
+User diagnostics on 0.3.0 confirmed travel, combat, completion counting and brief outside-FATE defense/resumption. Panaq Attack (1880) opened Talk, then stopped with an owned NPC binding and callback but no speaker match. Version 0.3.1 compares the localized NPC label with the live Talk header instead of UIModule.LastTalkName. It retains NPC/FATE binding, proximity, callback continuity and bounded interaction ownership. It does not read or record the dialogue body.
+
+107 local tests pass with zero compile warnings/errors. New regression coverage checks complete speaker labels across whitespace, case and Unicode composition, rejects missing/wrong labels, and exercises five verified Talk pages followed by the matching Yes confirmation, level sync and combat. These tests simulate the dialogue evidence and runner; they do not validate native UI pointers or clicks in game.
+
+Pending: update to 0.3.1 and observe an NPC-started FATE without manual clicks, including every Talk page, Yes confirmation, sync and combat. Capture Diagnostics if speakerAvailable/speakerMatch is false or if advancement fails. No extra dialogue plugin is required by this implementation.
+
+## 0.3 experimental validation (historical)
 
 No 0.3 game-client validation has been performed. The user reported NPC failures on 0.2.1: Salty Showdown timed out after 60 seconds without an interaction request; Panaq Attack sent an interaction but stopped after three seconds with both event IDs empty and a visible Talk window. A stopped runner cannot subsequently sync or engage a manually started event.
 
