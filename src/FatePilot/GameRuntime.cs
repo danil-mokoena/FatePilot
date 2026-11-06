@@ -19,6 +19,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
     private readonly Combat combat;
     private readonly Travel travel;
     private readonly EventInteraction interaction;
+    private readonly GreensShop greensShop = new();
     private bool session, ownsTravelService;
     private ulong previousTarget, ownedTarget;
     private readonly Queue<string> messages = new();
@@ -81,10 +82,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
         if (Services.Plugin.GetIpcSubscriber<bool>(IntegrationIds.TravelIsBusy).InvokeFunc()
             || Services.Plugin.GetIpcSubscriber<bool>(IntegrationIds.NavigationPathIsRunning).InvokeFunc())
             throw new InvalidOperationException(L.T("Há navegação/viagem em andamento. Pare a outra automação antes de iniciar."));
-        var unlocked = Destinations();
-        foreach (var destination in options.Route.Concat(options.ReturnDestination is { } ret ? new[] { ret } : []))
-            if (!unlocked.Any(d => d.AetheryteId == destination.AetheryteId && d.TerritoryId == destination.TerritoryId))
-                throw new InvalidOperationException(L.T("Aetheryte indisponível para este personagem: ") + destination.Name);
+        ValidateOptions(options);
         previousTarget = Services.Targets.Target?.GameObjectId ?? 0;
         ownedTarget = 0;
         session = true;
@@ -92,11 +90,36 @@ internal sealed class GameRuntime : IRuntime, IDisposable
         travel.Begin(options);
     }
 
+    private void ValidateOptions(RunOptions options)
+    {
+        var unlocked = Destinations();
+        if (options.RestockGreens)
+        {
+            GreensShop.ValidateData();
+            if (!unlocked.Any(d => d.AetheryteId == GreensRestock.VendorCity.AetheryteId && d.TerritoryId == GreensRestock.VendorCity.TerritoryId))
+                throw new InvalidOperationException(L.T("Desbloqueie o aetheryte de Limsa Lominsa para repor Gysahl Greens."));
+            var inventory = GreensShop.Inventory();
+            if (!inventory.Ready || inventory.Count <= options.GreensThreshold)
+                _ = GreensRestock.Needed(options, inventory, 0);
+        }
+        foreach (var destination in options.Route.Concat(options.ReturnDestination is { } ret ? new[] { ret } : []))
+            if (!unlocked.Any(d => d.AetheryteId == destination.AetheryteId && d.TerritoryId == destination.TerritoryId))
+                throw new InvalidOperationException(L.T("Aetheryte indisponível para este personagem: ") + destination.Name);
+    }
+
+    public void UpdateOptions(RunOptions options)
+    {
+        ValidateOptions(options);
+        travel.UpdateOptions(options);
+    }
+
     public void End()
     {
         interaction.Cancel();
         List<string> errors = [];
         void Attempt(Action action) { try { action(); } catch (Exception ex) { errors.Add(ex.Message); } }
+        Attempt(greensShop.Close);
+        greensShop.Reset();
         Attempt(nav.Stop);
         Attempt(combat.End);
         Attempt(travel.End);
@@ -148,16 +171,17 @@ internal sealed class GameRuntime : IRuntime, IDisposable
             {
                 if (f.Address == 0 || f.FateId == 0) continue;
                 var native = (FateContext*)f.Address;
+                EventInteraction.SnapshotObjectives(native, objectives);
                 fates.Add(new(f.FateId, f.Name.TextValue, f.TerritoryType.RowId, (EventState)(byte)f.State,
                     f.Level, f.MaxLevel, f.Progress, f.TimeRemaining, f.Position, f.Radius,
                     native->Rule == 1, f.HasBonus, f.StartTimeEpoch)
                 {
                     Kind = FateRules.FromRule(native->Rule),
-                    CanStart = native->MotivationNpc is not (0 or 0xE0000000),
+                    CanStart = native->MotivationNpc is not (0 or 0xE0000000) || objectives.Any(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Starter),
+                    ObjectiveDiagnostic = $"FATE={f.FateId}; starterRef={native->MotivationNpc:X8}; recipientRef={native->ObjectiveNpc:X8}; array={native->ArrayEventHandler.Id:X8}; starters={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Starter)}",
                     HeldItems = native->Rule == 2 ? EventInteraction.ItemCount(native->TurnInEventItem != 0 ? native->TurnInEventItem : native->EventItem != 0 ? native->EventItem : native->ReqEventItem) : 0,
                     HandedIn = native->HandInCount,
                 });
-                EventInteraction.SnapshotObjectives(native, objectives);
             }
             foreach (var obj in Services.Objects)
             {
@@ -167,7 +191,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
                 if (obj is IBattleNpc npc && npc.IsTargetable && !npc.IsDead && npc.StatusFlags.HasFlag(StatusFlags.Hostile))
                 {
                     var fateId = ((NativeObject*)npc.Address)->FateId;
-                    enemies.Add(new(npc.GameObjectId, fateId, npc.Position, npc.HitboxRadius, npc.TargetObjectId == player.GameObjectId));
+                    enemies.Add(new(npc.GameObjectId, fateId, npc.Position, npc.HitboxRadius, npc.TargetObjectId == player.GameObjectId) { NameId = npc.NameId });
                 }
             }
         }
@@ -175,11 +199,13 @@ internal sealed class GameRuntime : IRuntime, IDisposable
         var occupied = c[ConditionFlag.Occupied] || c[ConditionFlag.OccupiedInQuestEvent] || c[ConditionFlag.OccupiedInEvent]
             || c[ConditionFlag.OccupiedInCutSceneEvent] || c[ConditionFlag.WatchingCutscene] || c[ConditionFlag.OccupiedSummoningBell];
         var interactionStatus = interaction.ReadStatus(occupied);
+        var gameWorld = player.CurrentWorld.ValueNullable;
+        var currency = CurrencyManager.Instance();
         return new World
         {
             LoggedIn = Services.Client.IsLoggedIn, Loading = loading, Dead = player.IsDead,
             Restricted = Services.Client.IsPvP || c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95],
-            Occupied = occupied, DialogueOpen = EventInteraction.DialogueOpen,
+            Occupied = occupied, DialogueOpen = EventInteraction.DialogueOpen || GreensShop.IsOpen,
             InteractionDiagnostic = occupied || EventInteraction.DialogueOpen ?
                 $"occupied={c[ConditionFlag.Occupied]}; questEvent={c[ConditionFlag.OccupiedInQuestEvent]}; event={c[ConditionFlag.OccupiedInEvent]}; cutscene={c[ConditionFlag.OccupiedInCutSceneEvent] || c[ConditionFlag.WatchingCutscene]}; dialog={EventInteraction.DialogueOpen}; lease={interactionStatus}" : null,
             Casting = player.IsCasting || c[ConditionFlag.MountOrOrnamentTransition],
@@ -195,6 +221,12 @@ internal sealed class GameRuntime : IRuntime, IDisposable
             EventInteractionError = interactionStatus == InteractionStatus.Foreign ? L.T("O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.") :
                 interactionStatus == InteractionStatus.Expired ? L.T("A interação com o NPC não terminou em 15 segundos. Consulte o diagnóstico.") : null,
             Gemstones = EventInteraction.ItemCount(26807),
+            GemstoneCap = currency == null ? 0 : (int)currency->GetItemMaxCount(26807),
+            CurrentWorld = gameWorld is { } current ? TrackerWorld.FromCurrent(current.RowId, current.Name.ToString(),
+                current.DataCenter.ValueNullable?.Name.ToString() ?? "", current.IsPublic, loading) : null,
+            GreensInventory = loading ? new(false, 0, 0, 0) : GreensShop.Inventory(),
+            GreensVendor = loading ? null : GreensShop.Vendor(),
+            GreensShop = greensShop.Read(occupied), GreensShopError = greensShop.Error,
         };
     }
 
@@ -212,6 +244,10 @@ internal sealed class GameRuntime : IRuntime, IDisposable
     public void Interact(ObjectiveActor actor) { Target(actor.Id); interaction.Begin(actor); }
     public void AdvanceEventInteraction() => interaction.Advance();
     public void CancelEventInteraction() => interaction.Cancel();
+    public void OpenGreensShop(VendorActor actor) { Target(actor.Id); greensShop.Open(actor); }
+    public void AdvanceGreensShop() => greensShop.Advance();
+    public void BuyGreens(GreensPurchase purchase) => greensShop.Buy(purchase);
+    public void CloseGreensShop() => greensShop.Close();
     public void StopMovement() => nav.Stop();
     public unsafe void Mount() => ActionManager.Instance()->UseAction(ActionType.GeneralAction, 9);
     public unsafe void Dismount() => ActionManager.Instance()->UseAction(ActionType.GeneralAction, 23);

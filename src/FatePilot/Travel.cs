@@ -21,6 +21,12 @@ internal sealed class Travel(Action<string> log)
         ReservedGil = 0; UsedTickets = 0; pending = false;
     }
 
+    public void UpdateOptions(RunOptions settings)
+    {
+        if (pending) throw new InvalidOperationException(L.T("Já existe um teleporte pendente."));
+        options = settings;
+    }
+
     public unsafe void Teleport(Destination destination)
     {
         if (pending) throw new InvalidOperationException(L.T("Já existe um teleporte pendente."));

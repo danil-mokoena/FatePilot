@@ -4,6 +4,7 @@ using Dalamud.Plugin.Services;
 using FatePilot.Core;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace FatePilot;
 
@@ -13,7 +14,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly GameRuntime runtime;
     private readonly Runner runner;
     private readonly MainWindow window;
-    private readonly ConcurrentQueue<string> requests = new();
+    private readonly ConcurrentQueue<(string Action, RunOptions? Options)> requests = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private double lastTick, lastCatalog = -100, lastError = -100;
     private bool disposed;
@@ -25,7 +26,7 @@ public sealed class Plugin : IDalamudPlugin
         Localization.Apply(config.Language);
         runtime = new();
         runner = new(runtime);
-        window = new(config, runner, runtime, requests.Enqueue);
+        window = new(config, runner, runtime, Request);
         Services.Commands.AddHandler("/fatepilot", new CommandInfo(OnCommand)
         {
             HelpMessage = "/fatepilot | start | stop | status | recover",
@@ -40,9 +41,12 @@ public sealed class Plugin : IDalamudPlugin
     {
         var action = args.Trim().ToLowerInvariant();
         if (action.Length == 0) window.Open();
-        else if (action is "start" or "stop" or "status" or "recover") requests.Enqueue(action);
+        else if (action is "start" or "stop" or "status" or "recover") Request(action);
         else Services.Chat.Print("/fatepilot | start | stop | status | recover");
     }
+
+    private void Request(string action) => requests.Enqueue((action, action is "start" or "settings"
+        ? JsonSerializer.Deserialize<RunOptions>(JsonSerializer.Serialize(config.Options))! : null));
 
     private void Update(IFramework framework)
     {
@@ -68,9 +72,10 @@ public sealed class Plugin : IDalamudPlugin
             }
             while (requests.TryDequeue(out var request))
             {
-                switch (request)
+                switch (request.Action)
                 {
-                    case "start": runner.Start(config.Options, world, now); break;
+                    case "start": runner.Start(request.Options!, world, now); break;
+                    case "settings": runner.QueueOptions(request.Options!); break;
                     case "stop": runner.Stop(L.T("Parado pelo usuário.")); break;
                     case "status": Services.Chat.Print("FatePilot: " + runner.Status); break;
                     case "recover": if (!runner.IsRunning) runtime.Recover(); break;
