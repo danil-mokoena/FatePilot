@@ -5,7 +5,7 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Status:** experimental 0.2.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Status:** experimental 0.2.1 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
 
 > [!WARNING]
 > **Use at your own risk.** Square Enix prohibits unauthorized third-party tools and automated or unattended play. Using this plugin may result in account suspension or a permanent ban. See the official [third-party tools statement](https://na.finalfantasyxiv.com/lodestone/topics/detail/68f4c4d3bdea34f732ee8db3425122b8b8d6ec3b) and [prohibited activities policy](https://support.na.square-enix.com/faqarticle.php?id=5382&kid=68216).
@@ -13,7 +13,15 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
 > FATE farming is associated with botting and RMT in [community discussions](https://www.reddit.com/r/ffxivdiscussion/comments/12ki4a0/fate_botting_in_endwalker_zones/). Claims that FATEs receive particular enforcement priority are community perceptions, not a confirmed official policy. FatePilot offers no protection against detection or account penalties. You are responsible for the decision to use it.
 
 > [!IMPORTANT]
-> **This is a preview build.** Initial combat has been reported working by a user. The new collection, NPC interaction and escort adapters still need in-game validation, as do the revised UI and full travel/ticket cycle. The 52 local tests cover simulated controller behavior, translations and static privacy checks; they do not execute the native adapters in a live client.
+> **This is a preview build.** Initial combat has been reported working by a user. Version 0.2.0 stopped during NPC activation in live testing; 0.2.1 corrects the interaction transition and event recognition. The corrected native flow, collection hand-ins, escorts and full travel/ticket cycle still need in-game validation. The 60 local tests cover simulated controller behavior, translations and static privacy checks; they do not execute the native adapters in a live client.
+
+### Fixed in 0.2.1
+
+- Wait briefly for the game's event context after requesting an NPC interaction, instead of stopping immediately when Occupied is raised.
+- Recognize both the FATE director and its associated array event. Select a native event-menu entry only when it uniquely belongs to the expected NPC and FATE.
+- Allow bounded mount/dismount transitions without treating them as unrelated dialogs, and wait for the transition cast to finish.
+- Record interaction requests, recognition and failure context in local Diagnostics.
+- Start expansion groups collapsed in Route.
 
 ## Features
 
@@ -56,6 +64,8 @@ You do **not** need the .NET SDK to install the compiled plugin. The SDK and Pow
 5. Open the panel with `/fatepilot`.
 
 Use the URL above for installation. It points to the plugin catalog; the normal GitHub project page is for browsing the source and documentation. Future releases will use the same catalog URL.
+
+If the installer still shows a question mark after updating from 0.1, clear Dalamud's in-memory image cache: `/xldev` → **Plugins → Clear cached images/icons**, then reopen the installer. Use `/xldev` again to close the developer bar. Restarting the game also recreates this cache. The current package and catalog both include the icon URL; reinstalling FatePilot is unnecessary for a stale image cache.
 
 For local development, extract the plugin ZIP from [Releases](https://github.com/danil-mokoena/FatePilot/releases), keep the two DLLs, dependency JSON and manifest together, and add the full path to `FatePilot.dll` under **Dev Plugin Locations** instead. Do not load a development copy and the installed copy simultaneously.
 
@@ -144,7 +154,7 @@ The script builds Release, runs the tests, inspects the assemblies, prepares the
 
 `src/FatePilot.Core` contains the game-independent session controller. `src/FatePilot` contains the UI and adapters. `tests/FatePilot.Tests` contains the behavioral and privacy checks. Exact external API names are centralized in `IntegrationIds.cs`.
 
-To regenerate release metadata separately, run `./prepare-repository.ps1 -ReleaseDirectory './artifacts' -Tag 'v0.2.0'`. It verifies the DLL/manifest version before writing `pluginmaster.json`; it does not publish anything itself. Publish the release ZIP before updating the public catalog.
+To regenerate release metadata separately, run `./prepare-repository.ps1 -ReleaseDirectory './artifacts' -Tag 'v0.2.1'`. It verifies the DLL/manifest version before writing `pluginmaster.json`; it does not publish anything itself. Publish the release ZIP before updating the public catalog.
 
 For bug reports, include versions, reproduction steps and expected/observed behavior. Review diagnostics before sharing them; character and account names are not required. Translation corrections are welcome.
 

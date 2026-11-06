@@ -37,7 +37,8 @@ When the panel is closed and no session is running, periodic world reads for the
 - Restoration of prior settings, including forced-disabled state, while preserving externally changed presets.
 - Recovery record restricted to 64 KiB with structural validation before restoration.
 - Cancellation only of the session's own Teleport cast; no generic Yes/No dialog acceptance.
-- FATE interactions revalidate object role and distance. Talk/Yes-No advancement requires a matching event and object in the native event context, with ownership expiring after 15 seconds. Pre-existing dialogs are not adopted; arbitrary menu choices are not automated.
+- FATE interactions revalidate object role and distance. A pending request waits up to three seconds for native context without clicking. Talk/Yes-No advancement requires the expected object and FATE director or associated array event; a native selector requires one unambiguous matching handler. Ownership expires after 15 seconds. Pre-existing dialogs are not adopted; arbitrary menu choices are not automated.
+- Mount/dismount requests permit up to five seconds of transient Occupied state without an open dialog. That grace period never authorizes dialogue callbacks.
 - Travel-budget checks before requesting a teleport; ticket consumption checked on arrival.
 - Deadlines for travel, instance changes, synchronization and combat; temporary FATE exclusion after lack of progress.
 - Stops on death, logout, job change, duty/PvP entry, unexpected travel or interaction.
@@ -53,6 +54,6 @@ Native ticket behavior still needs validation with actual Teleport settings. Arr
 
 ## Reproduce and report
 
-Run `./build.ps1` with .NET SDK 10, PowerShell 7 and Dalamud API 15 references. It builds, runs 52 tests, inspects assembly references/methods/resources, packages the output and generates SHA-256 hashes. Automated criteria are in `tests/FatePilot.Tests/PrivacyAudit.cs`. Manually review adapter changes as well.
+Run `./build.ps1` with .NET SDK 10, PowerShell 7 and Dalamud API 15 references. It builds, runs 60 tests, inspects assembly references/methods/resources, packages the output and generates SHA-256 hashes. Automated criteria are in `tests/FatePilot.Tests/PrivacyAudit.cs`. Manually review adapter changes as well.
 
 For a security concern, provide a minimal reproduction and affected version. Do not include credentials, character/account identifiers or unreviewed private logs in public issues. The plugin does not upload support diagnostics automatically.

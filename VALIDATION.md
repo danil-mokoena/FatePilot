@@ -3,13 +3,13 @@
 ## Completed outside the game
 
 - Release compilation: zero errors and zero warnings.
-- 52 passing tests covering simulated controller behavior, repeated and partial hand-ins, escort following, NPC activation, group-boss filtering, gemstone gains, costs, translations, sensitive API access and embedded assembly resources.
+- 60 passing tests covering simulated controller behavior, repeated and partial hand-ins, escort following, NPC activation, delayed dialog context, dismount transitions, ownership rejection/timeouts, group-boss filtering, gemstone gains, costs, translations, sensitive API access and embedded assembly resources.
 - Review of the contracts used against available integration source code.
 - Manifest, author, version, package-content and SHA-256 checks.
 
 ## Pending: live client
 
-The user reported that initial combat works in 0.1.0. This does not validate the new 0.2 objective adapters or the rest of the following checklist.
+The user reported that initial combat works in 0.1.0. In 0.2.0, the diagnostic sequence for Lay Off the Horns reached NPC activation and immediately stopped as an unrelated interaction. The user then started the event manually. Version 0.2.1 changes the pending-context and mount/dismount handling; those fixes still need a live retest. Simulations do not establish that a native interaction succeeded.
 
 The following is a test plan, not a list of observed in-game results. Supervised testing helps find functional defects; it does not remove the account-policy risk described in the README.
 
@@ -24,6 +24,7 @@ The following is a test plan, not a list of observed in-game results. Supervised
 9. Start an NPC-triggered collection FATE. Observe ground pickups and enemy drops, return at 15 items, confirmed hand-in and resumed collection. Repeat a second batch within the same event. Test a partial batch after 45 seconds and near the ending phase. Verify that the FATE counter changes only after observed success, not after each batch.
 10. Follow an escort through quiet intervals and combat waves. Check Stop during an NPC interaction and confirm that unrelated dialogs are not advanced. Record unsupported interaction flows without bypassing ownership checks.
 11. Confirm Daivadipa/Chi are ignored with the default filter and compare gemstone increases with the session counter. Check the active-event timer; respawn forecasting is not included.
+12. Retest a preparing FATE without manually clicking its NPC. Diagnostics should distinguish the approach, interaction request, recognized dialogue and Running transition. If it stops, capture the event-handler diagnostics and state. Do not interpret a successful manual start as automatic activation.
 
 If a failure occurs, stop and review local diagnostics. **Copy diagnostics** acts only when clicked; inspect the text before sharing. There is no automatic support upload.
 

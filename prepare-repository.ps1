@@ -2,7 +2,7 @@ param(
     [string]$Owner = 'danil-mokoena',
     [string]$Repository = 'FatePilot',
     [string]$ReleaseDirectory = (Join-Path $PSScriptRoot 'artifacts'),
-    [string]$Tag = 'v0.2.0'
+    [string]$Tag = 'v0.2.1'
 )
 $ErrorActionPreference = 'Stop'
 if ($Owner -notmatch '^[A-Za-z0-9][A-Za-z0-9-]*$' -or $Repository -notmatch '^[A-Za-z0-9_.-]+$' -or $Tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid repository or tag.' }
