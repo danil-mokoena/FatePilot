@@ -54,6 +54,7 @@ public sealed class RunOptions
     public int TicketMinimumFare { get; set; }
     public int MaximumTeleportGil { get; set; }
     public bool RestockGreens { get; set; }
+    public bool SummonChocobo { get; set; }
     public int GreensThreshold { get; set; } = 10;
     public int GreensTarget { get; set; } = 99;
     public int GreensGilLimit { get; set; } = 10000;
@@ -118,6 +119,8 @@ public sealed record World
     public int GemstoneCap { get; init; }
     public TrackerWorld? CurrentWorld { get; init; }
     public GreensInventory GreensInventory { get; init; } = new(false, 0, 0, 0);
+    public float? CompanionSecondsLeft { get; init; }
+    public bool CanSummonChocobo { get; init; }
     public VendorActor? GreensVendor { get; init; }
     public GreensShopState GreensShop { get; init; }
     public string? GreensShopError { get; init; }
@@ -146,4 +149,5 @@ public interface IRuntime
     void AdvanceGreensShop();
     void BuyGreens(GreensPurchase purchase);
     void CloseGreensShop();
+    bool UseGysahlGreens();
 }

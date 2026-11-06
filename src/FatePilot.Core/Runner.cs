@@ -49,6 +49,7 @@ public sealed partial class Runner(IRuntime runtime)
             PendingReturnGoal = ReturnGoal.None;
             sessionStarted = now;
             ResetRestock();
+            ResetCompanion();
             pendingOptions = null; OptionsError = null;
             previousGemstones = world.Gemstones;
             Selected = null;
@@ -92,6 +93,7 @@ public sealed partial class Runner(IRuntime runtime)
             if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
             if (w.Job != 0 && w.Job != sessionJob) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
+            ObserveCompanion(w, now);
             ApplyPendingOptions(w);
             if (w.LoggedIn && !w.Loading && options.AvoidGemstoneCap && w.GemstoneCap <= 0)
             { Stop(L.T("Não foi possível consultar o limite de gemstones."), true); return; }
@@ -129,6 +131,8 @@ public sealed partial class Runner(IRuntime runtime)
             }
             if (w.NavError != null) { SkipOrFail(L.T("Navegação: {0}", w.NavError), now); return; }
             if (HandleUnexpectedCombat(w, now)) return;
+            if (companionPending && !w.InCombat && State is (RunState.Selecting or RunState.Waiting or RunState.Landing) && !HasPriorityCompanionThreat(w))
+            { runtime.StopMovement(); runtime.SetCombat(false); return; }
             if (PendingReturnGoal != ReturnGoal.None && State == RunState.HubApproach)
             { nextInstance = 0; runtime.StopMovement(); Enter(RunState.Selecting, SessionGoals.Label(PendingReturnGoal), now); }
 
@@ -170,6 +174,7 @@ public sealed partial class Runner(IRuntime runtime)
             Teleport(options.Route[0], w, now);
             return;
         }
+        if (TrySummonCompanion(w, now)) return;
         if (!w.NavReady)
         {
             if (now - since > 180) Stop(L.T("módulo de navegação não carregou a malha desta zona em 180 segundos."), true);
@@ -281,6 +286,7 @@ public sealed partial class Runner(IRuntime runtime)
             return;
         }
         if (w.Casting) return;
+        if (TrySummonCompanion(w, now)) return;
         Enter(f.State == EventState.Preparing ? RunState.StartingEvent : RunState.Syncing,
             f.State == EventState.Preparing ? L.T("Iniciando o FATE pelo NPC.") : L.T("Verificando sincronização de nível."), now);
     }

@@ -24,7 +24,7 @@ public sealed partial class Runner
 
     private void ApplyPendingOptions(World w)
     {
-        if (pendingOptions == null || PendingReturnGoal != ReturnGoal.None ||
+        if (pendingOptions == null || companionPending || PendingReturnGoal != ReturnGoal.None ||
             State is not (RunState.Selecting or RunState.Waiting) || Selected != null ||
             w.Loading || !w.LoggedIn || w.InCombat || w.Casting || w.Occupied || w.DialogueOpen || w.TravelBusy) return;
         var candidate = pendingOptions;
