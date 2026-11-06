@@ -5,7 +5,18 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.3.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.4.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 0.4
+
+- Sidebar navigation, grouped settings panels and a persistent session header with compact Start/Stop controls.
+- Local game icons for FATEs, aetherytes, gil, tickets and supplies. FATE rows show completion bars and remaining time alongside their names.
+- A Supplies page with current Greens stock, editable restock threshold/target, a stock bar and separate shopping/travel budgets.
+- Optional **Automatically summon the chocobo**, independent of restocking and off by default. Enable it in **Supplies**. Uses one Gysahl Greens outside combat when the companion is inactive and the game permits it, including after landing. Active companions are not extended. An unconfirmed summon suspends further item use for that session while the route continues.
+- A supervision reminder before every new session, including command starts. Confirm it to begin; cancel or Stop leaves automation inactive.
+- All new controls and messages in English, Japanese, German, French, Brazilian Portuguese and Spanish. Includes the 0.3.1 NPC speaker fix.
+
+118 local tests pass, with zero build warnings/errors. Native layout, dialogue clicks and Chocobo summoning still need supervised in-game validation; local tests do not prove these native actions work.
 
 ### Fixed in 0.3.1
 
@@ -21,10 +32,10 @@ NPC dialogue ownership now reads the speaker directly from the visible Talk wind
 - Handle ordinary attackers outside the selected FATE, then resume travel. Known group-boss exclusions remain in force.
 - Nearest-first selection, including NPC-started FATEs. Bonus preference only breaks equal-distance ties.
 - NPC binding supports server entity IDs, local object handles and unique native FATE associations. Local multi-page conversations can be recognized by their verified NPC, localized speaker and callback, even when global event fields are empty. Confirmation must use the same callback; unrelated dialogs remain excluded. No additional dialogue plugin is required by this implementation.
-- Optional Gysahl Greens threshold/target restocking with a separate gil budget and confirmed purchases from a verified Limsa Lominsa vendor. Finish the current FATE, replenish supplies and resume the route. This does not summon a chocobo.
+- Optional Gysahl Greens threshold/target restocking with a separate gil budget and confirmed purchases from a verified Limsa Lominsa vendor. Finish the current FATE, replenish supplies and resume the route. Summoning is a separate option added in 0.4.
 - A Faloop tab showing the **current** world and data center, including visits. Its click-only browser link selects that world on the website. Live reports and timers are not imported.
 
-107 local tests cover the controller, translations and privacy checks. Native NPC interactions, shop purchases and the other new flows still require in-game validation. [Faloop design and remaining work](FALOOP-DESIGN.md) explains the companion link and the supported read API still to be verified for future report retrieval.
+[Faloop design and remaining work](FALOOP-DESIGN.md) explains the companion link and the supported read API still to be verified for future report retrieval. Native NPC interactions and shop purchases remain experimental.
 
 Validate development without creating release ZIPs or changing the catalog: `./build.ps1 -ValidateOnly`. Use `-Dotnet` for a local SDK path if needed.
 
@@ -46,7 +57,7 @@ Validate development without creating release ZIPs or changing the catalog: `./b
 
 ## Features
 
-| Area | Available in 0.3 experimental |
+| Area | Available in 0.4 experimental |
 |---|---|
 | FATE selection | Combat, collection, escort and defense; bounded NPC activation; level/progress/time filters, bonus preference and an ignore list |
 | Collection | Ground pickups, objective enemies and repeated NPC hand-ins; default batch of 15, with partial deliveries after 45 seconds or near the end |
@@ -54,13 +65,13 @@ Validate development without creating release ZIPs or changing the catalog: `./b
 | Travel | Zone image cards grouped by expansion, reorderable routes, discovered instance rotation, mounts, unlocked flight and level sync |
 | Session goals | Return by completed FATEs, earned gemstones, elapsed time or currency-cap reserve |
 | Teleport costs | Aetheryte Ticket switch, minimum fare, explicit gil fallback and a session gil budget |
-| Supplies | Optional Gysahl Greens restocking, verified vendor and separate purchase budget |
+| Supplies | Separate optional Chocobo summoning and Greens restocking, verified vendor and purchase budget |
 | Recovery | Stuck-route handling, operation timeouts, control conflict detection and restoration of previous settings |
-| Interface | Slate and gold design, live settings edits, completion bars, session counters and local diagnostics |
+| Interface | Slate and gold sidebar, local game icons, live settings edits, completion bars and supervision reminder |
 | Faloop | Click-only world-filtered companion link; no report or timer import |
 | Group bosses | Known large-group bosses such as Daivadipa and Chi excluded by default |
 
-The plugin does not start farming simply because it is loaded. Start a session explicitly from the panel or command.
+The plugin does not start farming simply because it is loaded. Request a session from the panel or command, then confirm the supervision reminder.
 
 ## Requirements
 
@@ -106,7 +117,7 @@ These integrations are installed separately. Their implementations are not bundl
 
 ## First session
 
-Stop other combat, movement and travel automation first. In **Session**, choose a language, a return city and a FATE goal. In **Route**, click zone cards under each expansion to select a route, then use the arrows to reorder it. If a zone has multiple unlocked aetherytes, choose its arrival point. Review **Costs** and **FATEs** before starting.
+Stop other combat, movement and travel automation first. Choose the language in **Settings**, then set a return city and a FATE goal in **Session**. In **Route**, click zone cards under each expansion to select a route, then use the arrows to reorder it. If a zone has multiple unlocked aetherytes, choose its arrival point. Review **Supplies** and **FATEs**, then press Start and confirm the supervision reminder.
 
 The catalog reads the client's overworld zones and loading artwork locally: 48 zones in the data used for this build. Zones without a direct unlocked teleport destination remain visible but cannot be added. Some older zones share regional artwork. The selected route repeats until a goal or Stop ends the session.
 
@@ -118,7 +129,7 @@ Collection uses the selected event's item and NPC identifiers, independent of th
 
 The batch size is configurable in **FATEs**. Collection and escort participation can also be disabled independently. Interactions are limited to objects associated with the selected FATE, with bounded attempts and timeouts. Unsupported dialogue flows stop rather than click arbitrary menu choices. These native flows are experimental and need supervised validation.
 
-Known large-group encounters are excluded by default. This is a maintained ID list, not a universal difficulty detector; add other unsuitable events to your ignore list. The gemstone counter sums observed increases during the session, excluding the starting balance. It cannot measure rewards lost to the currency cap or distinguish simultaneous gains and spending. The timer shows the currently active FATE's remaining time. The 0.3 development tab links to Faloop, but does not fetch reports or predict respawns.
+Known large-group encounters are excluded by default. This is a maintained ID list, not a universal difficulty detector; add other unsuitable events to your ignore list. The gemstone counter sums observed increases during the session, excluding the starting balance. It cannot measure rewards lost to the currency cap or distinguish simultaneous gains and spending. The timer shows the currently active FATE's remaining time. The Faloop page links to the website, but does not fetch reports or predict respawns.
 
 For initial functional testing, select one familiar zone and a goal of one FATE, then observe the entire cycle. This helps validate behavior; it does not reduce or remove the account-policy risk. Follow the [validation checklist](VALIDATION.md) before relying on additional features.
 
@@ -130,7 +141,9 @@ Open the game's Teleport window once before the first ticket test. FatePilot use
 
 ### Gysahl Greens
 
-For optional **Gysahl Greens** restocking, choose a minimum remaining quantity, a target from 1 to 999, and a session purchase budget in Costs. The verified vendor is Bango Zango in Limsa Lominsa; current local game data lists 36 gil each. Batches contain at most 99 items, and both inventory and gil changes must confirm each purchase before another is sent. Teleports use their separate budget. An uncertain receipt stops without retrying a possibly completed purchase. Stop cannot undo a purchase already accepted by the game. The native shopping flow remains experimental.
+In **Supplies**, enable **Automatically summon the chocobo** to use Greens when the companion is inactive. This requires the companion to be unlocked and the game to permit the item. It waits until outside combat and unmounted, and confirms the companion timer after the request. Missing stock or unavailable item use leaves the route running. If a sent request is not confirmed within ten seconds, further Greens use is suspended for the session. A rejected request is throttled for at least sixty seconds. Stop prevents new requests but cannot undo an item action already accepted by the game.
+
+For optional **Gysahl Greens** restocking, choose a minimum remaining quantity, a target from 1 to 999, and a session purchase budget in **Supplies**. The verified vendor is Bango Zango in Limsa Lominsa; local game data lists 36 gil each. Batches contain at most 99 items, and both inventory and gil changes must confirm each purchase before another is sent. Teleports use their separate budget. An uncertain receipt stops without retrying a possibly completed purchase. Stop cannot undo a purchase already accepted by the game. Summoning and shopping remain experimental and can be enabled independently.
 
 ### Stopping
 
@@ -149,7 +162,7 @@ English · 日本語 · Deutsch · Français · **Português (Brasil)** · Espa�
 | Command | Action |
 |---|---|
 | `/fatepilot` | Open the panel |
-| `/fatepilot start` | Start with the saved settings |
+| `/fatepilot start` | Open the supervision reminder before starting |
 | `/fatepilot stop` | Stop and restore previous settings |
 | `/fatepilot status` | Print the current state to local chat |
 | `/fatepilot recover` | Restore a previous session's local recovery record while stopped |
@@ -158,7 +171,7 @@ English · 日本語 · Deutsch · Français · **Português (Brasil)** · Espa�
 
 Supported overworld rules include combat, collection, escort and defense. A preparing event is eligible only when it exposes a starter NPC. Event-specific mechanics or dialogue variants may still be unsupported. Completion means an observed successful end after participation; a disappearing FATE without confirmation does not count toward the return goal.
 
-Profiles, persistent history, job queues, repairs, automatic consumable use, voucher purchases, party coordination and general inventory/equipment stop conditions are not implemented. Greens purchasing and elapsed-time return goals are included in 0.3. There are no GM detection or concealment features.
+Profiles, persistent history, job queues, repairs, automatic food/potion use, voucher purchases, party coordination and general inventory/equipment stop conditions are not implemented. Greens purchasing, Chocobo summoning and elapsed-time return goals are included. There are no GM detection or concealment features.
 
 ### Next milestones
 
@@ -184,7 +197,7 @@ The script builds Release, runs the tests, inspects the assemblies, prepares the
 
 `src/FatePilot.Core` contains the game-independent session controller. `src/FatePilot` contains the UI and adapters. `tests/FatePilot.Tests` contains the behavioral and privacy checks. Exact external API names are centralized in `IntegrationIds.cs`.
 
-To regenerate release metadata separately, run `./prepare-repository.ps1 -ReleaseDirectory './artifacts' -Tag 'v0.3.0'`. It verifies the DLL/manifest version before writing `pluginmaster.json`; it does not publish anything itself. Publish the release ZIP before updating the public catalog.
+To regenerate release metadata separately, run `./prepare-repository.ps1 -ReleaseDirectory './artifacts' -Tag 'v0.4.0'`. It verifies the DLL/manifest version before writing `pluginmaster.json`; it does not publish anything itself. Publish the release ZIP before updating the public catalog.
 
 For bug reports, include versions, reproduction steps and expected/observed behavior. Review diagnostics before sharing them; character and account names are not required. Translation corrections are welcome.
 

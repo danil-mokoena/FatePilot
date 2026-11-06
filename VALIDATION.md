@@ -1,5 +1,15 @@
 # Experimental build validation
 
+## 0.4 interface and companion validation
+
+118 local tests pass with zero compilation warnings/errors. Ten new companion tests cover opt-in and live settings, readiness/stock/active-timer checks, a single request and confirmation, timeout without repetition, refusal throttling, landing before NPC interaction, combat/Stop/death/goal interruptions, resummoning after expiry and Forlorn priority. The session-start gate is also tested. Translation keys and placeholders match in all six languages; source and compiled privacy checks pass.
+
+The HTML design preview was reviewed in the browser, including navigation, supply inputs and the start reminder. It is a mockup, not a capture or test of native ImGui rendering. Game icons were checked against local game data. No game inputs, plugin reload or installation were performed during development.
+
+Pending in game: inspect all sidebar pages and icons at normal and enlarged UI scale; confirm that Start and `/fatepilot start` require the reminder and Cancel/Stop keep automation inactive. In Supplies enable Chocobo summoning, with Greens in the bag and companion unlocked: observe one use and an active timer, no use while already active, resummoning after expiry, and route continuation if stock or action availability is missing. Check a complete purchase/return/summon cycle separately. Stop during summoning must prevent later requests; the game may finish a previously accepted item action.
+
+The user had not yet tested 0.3.1 at the time of this revision. Its native Talk-header reader, multi-page advancement and Yes confirmation remain pending; the correction is included unchanged in 0.4.
+
 ## 0.3.1 dialogue hotfix
 
 User diagnostics on 0.3.0 confirmed travel, combat, completion counting and brief outside-FATE defense/resumption. Panaq Attack (1880) opened Talk, then stopped with an owned NPC binding and callback but no speaker match. Version 0.3.1 compares the localized NPC label with the live Talk header instead of UIModule.LastTalkName. It retains NPC/FATE binding, proximity, callback continuity and bounded interaction ownership. It does not read or record the dialogue body.

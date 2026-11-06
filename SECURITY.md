@@ -1,4 +1,4 @@
-# Security review — FatePilot 0.3 experimental
+# Security review — FatePilot 0.4 experimental
 
 Reviewed November 6, 2026. Scope: this project's source and Release assemblies. Methods: manual review, simulated controller tests and assembly metadata inspection. Initial combat was reported working by a user; the new native objective and shopping adapters have not been validated live. No process-wide network capture has been performed.
 
@@ -21,6 +21,7 @@ The logo, cat portrait and six language catalogs are embedded locally. Zone artw
 | FATEs, associated NPC/object identifiers and positions, aetherytes | Target, objective and route selection | Memory; no nearby-player history |
 | Collection-item, gemstone, ticket/gil and Greens counters, bag capacity and previous target identifier | Session, restocking and restoration | Memory |
 | Verified NPC's localized sheet label and current Talk speaker label | Scope local NPC dialogue progression | Compared transiently; no dialogue body, chat history or speaker labels logged or exported |
+| Chocobo remaining time and Greens action availability | Avoid redundant item use and confirm summoning | Memory; no companion name read or exported |
 | Most recent 120 session events | Diagnostics | Bounded in-memory queue, not a persistent plugin history |
 | Update or restoration failure | Technical notice | Generic host-log message without a player payload |
 | Copied diagnostics | Explicit user action | Clipboard only when **Copy diagnostics** is clicked |
@@ -42,6 +43,8 @@ When the panel is closed and no session is running, periodic world reads for the
 - FATE interactions revalidate object role and distance. A pending request waits up to three seconds for native context without clicking. Talk/Yes-No advancement requires the expected object and FATE director or associated array event; a native selector requires one unambiguous matching handler. Ownership expires after 15 seconds. Pre-existing dialogs are not adopted; arbitrary menu choices are not automated.
 - Local-dialogue fallback applies only when global event fields are empty: the exact session NPC must remain targeted, nearby and bound to the selected FATE. The Talk speaker must match that NPC's localized game-sheet label and expose a callback receiver. A subsequent Yes/No must use the same receiver within five seconds of the matched Talk. Other menus, different speakers/actors and populated unrelated events invalidate this fallback. Brief page transitions do not discard the existing lease; its total 15-second deadline remains.
 - Restocking is opt-in and restricted to item 4868, vendor 1001787, shop 0x0004000E and the verified 36-gil unit price. It never sells/discards items. Native shop ownership, mode, quantity, capacity and funds are checked before every purchase. Inventory and gil must confirm the receipt before another batch. No automatic retry after an uncertain purchase.
+- Chocobo summoning is separately opt-in and restricted to item 4868. Live companion time, stock, action availability, animation/queue state and player conditions are checked before use. A sent request waits up to ten seconds for an active companion; a timeout suspends further use for the session. Rejected requests are throttled for sixty seconds. No active-timer extension, arbitrary item-use command or additional plugin is introduced.
+- Every new session requires the supervision reminder to be confirmed, including command starts. Closing/canceling it or stopping cancels the pending request; confirmation is consumed once.
 - Live settings are copied and validated, then applied at an idle selection boundary. In-flight actions and payment reservations are not replaced or reset; invalid updates preserve active settings.
 - Mount/dismount requests permit up to five seconds of transient Occupied state without an open dialog. That grace period never authorizes dialogue callbacks.
 - Travel-budget checks before requesting a teleport; ticket consumption checked on arrival.
@@ -59,6 +62,6 @@ Native ticket behavior still needs validation with actual Teleport settings. Arr
 
 ## Reproduce and report
 
-Run `./build.ps1 -ValidateOnly` with .NET SDK 10, PowerShell 7 and Dalamud API 15 references. It builds, runs 105 tests and inspects assembly references/methods/resources without producing release packages or changing the catalog. Automated criteria are in `tests/FatePilot.Tests/PrivacyAudit.cs`. Manually review adapter changes as well.
+Run `./build.ps1 -ValidateOnly` with .NET SDK 10, PowerShell 7 and Dalamud API 15 references. It builds, runs 118 tests and inspects assembly references/methods/resources without producing release packages or changing the catalog. Automated criteria are in `tests/FatePilot.Tests/PrivacyAudit.cs`. Manually review adapter changes as well.
 
 For a security concern, provide a minimal reproduction and affected version. Do not include credentials, character/account identifiers or unreviewed private logs in public issues. The plugin does not upload support diagnostics automatically.

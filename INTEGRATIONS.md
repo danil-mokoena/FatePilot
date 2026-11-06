@@ -20,3 +20,5 @@ For positioning, FatePilot creates a temporary movement-only preset, records the
 These are independent programs with their own behavior and permissions. For example, the ability component consults a remote IPC status resource, and navigation can download navigation data. Requests may be triggered through their APIs. FatePilot's lack of its own HTTP client does not make the whole setup offline.
 
 Dependency implementations, DLLs and resources are not bundled in this project. Their licenses and installations remain separate. Exact wire identifiers are centralized in `src/FatePilot/IntegrationIds.cs` and must retain their original spelling for compatibility.
+
+Chocobo summoning uses the local client directly: companion time from `UIState.Buddy.CompanionInfo.TimeLeft`, item readiness through `ActionManager.GetActionStatus`, and `UseAction(Item, 4868, extraParam: 0xFFFF)`. The item is checked again before the call, and the controller waits for an active timer before considering it confirmed. This adds no plugin dependency or network access. Native behavior still requires live validation.
