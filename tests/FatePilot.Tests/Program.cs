@@ -200,6 +200,41 @@ Test("Gemstone session counter counts observed gains, not the initial balance", 
     r.Tick(world with{Gemstones=110},3); r.Tick(world with{Gemstones=126},4);
     Assert(r.GemstonesEarned==32);
 });
+Test("Live NPC speaker comparison handles localization and refuses incomplete labels", () =>
+{
+    Assert(DialogueSpeaker.Matches("pelupelu peddler", "Pelupelu Peddler"));
+    Assert(DialogueSpeaker.Matches("  Pelupelu  Peddler", "Pelupelu\u00a0Peddler "));
+    Assert(DialogueSpeaker.Matches("Marchand égaré", "Marchand e\u0301gare\u0301"));
+    Assert(DialogueSpeaker.Matches("ペルペル族の商人", "ペルペル族の商人"));
+    foreach(var label in new string?[]{null,"", " ", "Pelupelu", "Other Peddler", "Pelupelu Peddler's assistant", new('a',257)})
+        Assert(!DialogueSpeaker.Matches("Pelupelu Peddler", label));
+    Assert(!DialogueSpeaker.Matches(null,"Pelupelu Peddler"));
+});
+Test("Five live-speaker pages and their Yes confirmation lead to sync and combat", () =>
+{
+    var pending=fate with{State=EventState.Preparing,CanStart=true,SecondsLeft=0,StartedAt=0,Position=Vector3.Zero};
+    var w=world with{Fates=[pending],Objectives=[new(501,1,ObjectiveRole.Starter,Vector3.Zero)],CurrentFate=1};
+    var (r,rt)=Started(w); for(var i=1;i<=5;i++) r.Tick(w,i);
+    var guard=new LocalDialogueGuard(); var lease=new InteractionLease(); lease.Begin(501,[0x801A0001],5);
+    for(var page=6;page<=10;page++)
+    {
+        var local=guard.Observe(true,true,true,DialogueSpeaker.Matches("pelupelu peddler","Pelupelu Peddler"),false,700,page);
+        var status=lease.Observe(page,true,default,default,false,0,local);
+        Assert(status==InteractionStatus.Owned);
+        r.Tick(w with{OwnEventInteraction=status==InteractionStatus.Owned,Occupied=true,DialogueOpen=true},page);
+    }
+    var yes=guard.Observe(true,true,false,false,true,700,11);
+    Assert(yes && lease.Observe(11,true,default,default,false,0,yes)==InteractionStatus.Owned);
+    r.Tick(w with{OwnEventInteraction=yes,Occupied=true,DialogueOpen=true},11);
+    Assert(rt.Advances==6 && r.IsRunning);
+    Assert(lease.Observe(12,false,default,default,false)==InteractionStatus.None);
+    var running=w with{Fates=[pending with{State=EventState.Running,SecondsLeft=600,StartedAt=99}]};
+    r.Tick(running,12); r.Tick(running,13);
+    Assert(rt.Syncs==1 && r.State==RunState.Syncing);
+    r.Tick(running with{Synced=true},14);
+    r.Tick(running with{Synced=true,Enemies=[new(99,1,Vector3.One,1,false)]},15);
+    Assert(r.State==RunState.Fighting && rt.LastTarget==99 && rt.CombatEnabled);
+});
 Test("Local conversation advances several pages and only its own confirmation", () =>
 {
     var guard=new LocalDialogueGuard(); var lease=new InteractionLease(); lease.Begin(502,[0x801A0001],0);
