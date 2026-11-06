@@ -12,6 +12,20 @@ var zone1 = new Destination(1000, 100, "Zone A");
 var zone2 = new Destination(1001, 101, "Zone B");
 var fate = new FateInfo(1, "Combat FATE", 1000, EventState.Running, 90, 94, 0, 600, new(100, 0, 0), 50, true, false, 1234);
 var world = new World { LoggedIn = true, Territory = 1000, Job = 22, Level = 100, NavReady = true, Position = Vector3.Zero, Fates = [fate], Instance = 1, InstanceCount = 3 };
+Test("Starting requires fresh confirmation and cancellation prevents a delayed start", () =>
+{
+    var gate = new StartConfirmation();
+    Assert(!gate.Confirm(false));
+    Assert(gate.Request(false) && gate.Pending);
+    gate.Cancel();
+    Assert(!gate.Confirm(false) && !gate.Pending);
+    Assert(gate.Request(false) && gate.Confirm(false));
+    Assert(!gate.Confirm(false));
+    Assert(!gate.Request(true) && !gate.Pending);
+    Assert(gate.Request(false));
+    Assert(!gate.Confirm(true) && !gate.Pending);
+    Assert(gate.Request(false) && gate.Confirm(false));
+});
 RunOptions Options() => new() { ReturnDestination = home, ReturnAfterFates = 1, UseMount = false, IdleSeconds = 10 };
 (Runner Runner, Fake Runtime) Started(World? w = null, RunOptions? o = null)
 {
@@ -676,6 +690,113 @@ RunOptions GreensOptions(int threshold=10,int target=99) => new()
     shop=shop with{GreensShop=GreensShopState.Ready,Occupied=true,DialogueOpen=true};
     r.Tick(shop,6); return (r,rt,shop);
 }
+Test("Companion summoning requires opt-in, known inactive state, stock and game permission", () =>
+{
+    var w=world with{Fates=[],GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.ReturnAfterFates=0;
+    var (r,rt)=Started(w,o);r.Tick(w,1);Assert(rt.GreensUses==0);
+    o.SummonChocobo=true;
+    foreach(var blocked in new[]{w with{CompanionSecondsLeft=null},w with{CompanionSecondsLeft=1200},
+        w with{GreensInventory=new(true,0,1000,100)},w with{GreensInventory=new(false,10,1000,100)},
+        w with{CanSummonChocobo=false},w with{Mounted=true},w with{Flying=true}})
+    {
+        (r,rt)=Started(blocked,o);r.Tick(blocked,1);Assert(rt.GreensUses==0);
+    }
+});
+Test("One Greens use waits for confirmation then resumes and does not extend an active companion", () =>
+{
+    var w=world with{GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;
+    var (r,rt)=Started(w,o);r.Tick(w,1);r.Tick(w,2);
+    r.Tick(w with{Casting=true},3);r.Tick(w with{Occupied=true},4);
+    Assert(rt.GreensUses==1 && rt.Moves==0 && r.IsRunning);
+    w=w with{CompanionSecondsLeft=1800,GreensInventory=new(true,9,1000,100)};
+    r.Tick(w,5);Assert(r.State==RunState.Mounting);
+    r.Tick(w,6);r.Tick(w with{Position=fate.Position,CurrentFate=1},7);
+    r.Tick(w with{Position=fate.Position,CurrentFate=1},8);
+    Assert(rt.GreensUses==1 && r.State==RunState.Syncing);
+});
+Test("Unconfirmed Greens use resumes the route and is never repeated in the session", () =>
+{
+    var w=world with{Fates=[],GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;o.ReturnAfterFates=0;
+    var (r,rt)=Started(w,o);r.Tick(w,1);
+    w=w with{GreensInventory=new(true,9,1000,100)};
+    r.Tick(w,5);Assert(rt.GreensUses==1);
+    r.Tick(w,11);r.Tick(w,100);r.Tick(w,1000);
+    Assert(r.IsRunning && r.State==RunState.Waiting && rt.GreensUses==1);
+});
+Test("A rejected item request does not block travel or retry every tick", () =>
+{
+    var w=world with{Fates=[],GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;o.ReturnAfterFates=0;
+    var (r,rt)=Started(w,o);rt.RejectGreens=true;
+    r.Tick(w,1);r.Tick(w,2);r.Tick(w,60);
+    Assert(r.State==RunState.Waiting && rt.GreensUses==1);
+    r.Tick(w,61);Assert(rt.GreensUses==2);
+});
+Test("A mounted start summons only after landing and before the NPC interaction", () =>
+{
+    var pending=fate with{State=EventState.Preparing,CanStart=true,SecondsLeft=0,StartedAt=0,Position=Vector3.Zero};
+    var w=world with{Fates=[pending],Objectives=[new(501,1,ObjectiveRole.Starter,Vector3.Zero)],CurrentFate=1,
+        Mounted=true,GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;
+    var (r,rt)=Started(w,o);for(var i=1;i<=4;i++)r.Tick(w,i);
+    Assert(r.State==RunState.Landing && rt.GreensUses==0);
+    w=w with{Mounted=false};r.Tick(w,5);Assert(rt.GreensUses==1 && rt.Interactions.Count==0);
+    w=w with{CompanionSecondsLeft=1800};r.Tick(w,6);r.Tick(w,7);
+    Assert(r.State==RunState.StartingEvent && rt.Interactions.Count==1 && rt.GreensUses==1);
+});
+Test("Combat, Stop, death and return goals prevent additional companion actions", () =>
+{
+    var w=world with{GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;
+    foreach(var interruption in new[]{w with{InCombat=true},w with{Dead=true},w with{Occupied=true},w with{Casting=true}})
+    {
+        var (r,rt)=Started(w,o);r.Tick(interruption,1);Assert(rt.GreensUses==0);
+    }
+    var (stopped,srt)=Started(w,o);stopped.Tick(w,1);stopped.Stop();stopped.Tick(w,100);Assert(srt.GreensUses==1);
+    o.ReturnAfterMinutes=1;
+    var (returning,rrt)=Started(w,o);returning.Tick(w,60);Assert(rrt.GreensUses==0 && rrt.Teleports.Count==1);
+});
+Test("Companion settings apply live and wait until an accepted use finishes", () =>
+{
+    var w=world with{Fates=[],GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.ReturnAfterFates=0;
+    var (r,rt)=Started(w,o);r.Tick(w,1);
+    o.SummonChocobo=true;r.QueueOptions(o);r.Tick(w,2);Assert(rt.GreensUses==1);
+    o.SummonChocobo=false;r.QueueOptions(o);r.Tick(w,3);Assert(r.HasPendingOptions);
+    r.Tick(w with{CompanionSecondsLeft=1800},4);Assert(!r.HasPendingOptions);
+    r.Tick(w,100);Assert(rt.GreensUses==1);
+});
+Test("A confirmed companion can be summoned again after its timer expires", () =>
+{
+    var w=world with{Fates=[],GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;o.ReturnAfterFates=0;
+    var (r,rt)=Started(w,o);r.Tick(w,1);
+    r.Tick(w with{CompanionSecondsLeft=1800},2);
+    r.Tick(w with{CompanionSecondsLeft=1},1801);Assert(rt.GreensUses==1);
+    r.Tick(w with{GreensInventory=new(true,9,1000,100)},1802);Assert(rt.GreensUses==2);
+});
+Test("An attacker interrupts companion waiting and does not trigger another item use", () =>
+{
+    var w=world with{Fates=[],GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;o.ReturnAfterFates=0;
+    var (r,rt)=Started(w,o);r.Tick(w,1);
+    r.Tick(w with{InCombat=true,Enemies=[new(99,0,Vector3.Zero,1,true)]},2);
+    Assert(r.State==RunState.Defending && rt.LastTarget==99 && rt.CombatEnabled && rt.GreensUses==1);
+    r.Tick(w,12);r.Tick(w,100);Assert(r.IsRunning && rt.GreensUses==1);
+});
+Test("An existing Forlorn target takes priority over a companion summon", () =>
+{
+    var w=world with{Position=fate.Position,CurrentFate=1,Mounted=true,Synced=true,
+        GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
+    var o=Options();o.SummonChocobo=true;
+    var (r,rt)=Started(w,o);for(var i=1;i<=4;i++)r.Tick(w,i);
+    w=w with{Mounted=false,Enemies=[new(99,1,fate.Position,1,false){NameId=6737}]};
+    r.Tick(w,5);r.Tick(w,6);r.Tick(w,7);
+    Assert(rt.GreensUses==0 && rt.LastTarget==99 && rt.CombatEnabled);
+});
 Test("Greens trigger includes zero, one and user-selected stock thresholds", () =>
 {
     foreach(var threshold in new[]{0,1,10,20,35,99})
@@ -871,4 +992,7 @@ sealed class Fake : IRuntime
     public void AdvanceGreensShop() => ShopAdvances++;
     public void BuyGreens(GreensPurchase purchase) => Purchases.Add(purchase);
     public void CloseGreensShop() => ShopCloses++;
+    public int GreensUses;
+    public bool RejectGreens;
+    public bool UseGysahlGreens() { GreensUses++; return !RejectGreens; }
 }
