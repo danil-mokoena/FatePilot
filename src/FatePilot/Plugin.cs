@@ -15,6 +15,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Runner runner;
     private readonly MainWindow window;
     private readonly ConcurrentQueue<(string Action, RunOptions? Options)> requests = new();
+    private readonly StartConfirmation startConfirmation = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private double lastTick, lastCatalog = -100, lastError = -100;
     private bool disposed;
@@ -45,7 +46,7 @@ public sealed class Plugin : IDalamudPlugin
         else Services.Chat.Print("/fatepilot | start | stop | status | recover");
     }
 
-    private void Request(string action) => requests.Enqueue((action, action is "start" or "settings"
+    private void Request(string action) => requests.Enqueue((action, action is "confirm-start" or "settings"
         ? JsonSerializer.Deserialize<RunOptions>(JsonSerializer.Serialize(config.Options))! : null));
 
     private void Update(IFramework framework)
@@ -74,9 +75,18 @@ public sealed class Plugin : IDalamudPlugin
             {
                 switch (request.Action)
                 {
-                    case "start": runner.Start(request.Options!, world, now); break;
+                    case "start":
+                        if (startConfirmation.Request(runner.IsRunning)) window.PromptStart();
+                        break;
+                    case "confirm-start":
+                        if (startConfirmation.Confirm(runner.IsRunning)) runner.Start(request.Options!, world, now);
+                        break;
+                    case "cancel-start": startConfirmation.Cancel(); break;
                     case "settings": runner.QueueOptions(request.Options!); break;
-                    case "stop": runner.Stop(L.T("Parado pelo usuário.")); break;
+                    case "stop":
+                        startConfirmation.Cancel(); window.CancelStart();
+                        runner.Stop(L.T("Parado pelo usuário."));
+                        break;
                     case "status": Services.Chat.Print("FatePilot: " + runner.Status); break;
                     case "recover": if (!runner.IsRunning) runtime.Recover(); break;
                 }

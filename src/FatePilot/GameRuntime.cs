@@ -13,14 +13,14 @@ using Action = System.Action;
 
 namespace FatePilot;
 
-internal sealed class GameRuntime : IRuntime, IDisposable
+internal sealed partial class GameRuntime : IRuntime, IDisposable
 {
     private readonly Navigation nav = new();
     private readonly Combat combat;
     private readonly Travel travel;
     private readonly EventInteraction interaction;
     private readonly GreensShop greensShop = new();
-    private bool session, ownsTravelService;
+    private bool session, ownsTravelService, companionEnabled;
     private ulong previousTarget, ownedTarget;
     private readonly Queue<string> messages = new();
     public string[] Messages => messages.ToArray();
@@ -88,6 +88,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
         session = true;
         combat.Begin();
         travel.Begin(options);
+        companionEnabled = options.SummonChocobo;
     }
 
     private void ValidateOptions(RunOptions options)
@@ -111,6 +112,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
     {
         ValidateOptions(options);
         travel.UpdateOptions(options);
+        companionEnabled = options.SummonChocobo;
     }
 
     public void End()
@@ -132,6 +134,7 @@ internal sealed class GameRuntime : IRuntime, IDisposable
             Services.Targets.Target = Services.Objects.FirstOrDefault(x => x.GameObjectId == previousTarget);
         ownedTarget = previousTarget = 0;
         session = false;
+        companionEnabled = false;
         if (errors.Count > 0) throw new InvalidOperationException(string.Join(" | ", errors));
     }
 
@@ -225,6 +228,8 @@ internal sealed class GameRuntime : IRuntime, IDisposable
             CurrentWorld = gameWorld is { } current ? TrackerWorld.FromCurrent(current.RowId, current.Name.ToString(),
                 current.DataCenter.ValueNullable?.Name.ToString() ?? "", current.IsPublic, loading) : null,
             GreensInventory = loading ? new(false, 0, 0, 0) : GreensShop.Inventory(),
+            CompanionSecondsLeft = loading ? null : ReadCompanionSeconds(),
+            CanSummonChocobo = session && companionEnabled && !loading && CanUseGysahlGreens(),
             GreensVendor = loading ? null : GreensShop.Vendor(),
             GreensShop = greensShop.Read(occupied), GreensShopError = greensShop.Error,
         };

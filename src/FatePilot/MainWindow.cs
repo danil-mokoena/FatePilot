@@ -36,81 +36,15 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     public void Draw()
     {
         if (!open) return;
-        ImGui.SetNextWindowSize(new Vector2(790, 700), ImGuiCond.FirstUseEver);
-        ImGui.SetNextWindowSizeConstraints(new(640, 500), new(float.MaxValue, float.MaxValue));
+        var scale = ImGuiHelpers.GlobalScale;
+        ImGui.SetNextWindowSize(new Vector2(1040, 740) * scale, ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSizeConstraints(new Vector2(820, 560) * scale, new(float.MaxValue, float.MaxValue));
         PushTheme();
         try
         {
-        if (ImGui.Begin("FatePilot###FatePilotMain", ref open))
-        {
-            DrawLogo(54);
-            ImGui.SameLine();
-            ImGui.BeginGroup();
-            ImGui.TextColored(ImGui.ColorConvertFloat4ToU32(Gold), "F A T E P I L O T");
-            ImGui.TextDisabled(L.T("Trace sua rota. Encontre seu destino."));
-            ImGui.TextDisabled("By Mokoena  /  " + Version);
-            ImGui.EndGroup();
-            ImGui.Spacing();
-            if (ImGui.BeginTable("sessionStats", 4, ImGuiTableFlags.SizingStretchSame))
-            {
-                Stat("complete", L.T("FATEs concluídos"), runner.Completed.ToString());
-                Stat("gemstones", L.T("Gemstones obtidas"), runner.GemstonesEarned.ToString("N0"));
-                Stat("zones", L.T("Zonas na rota"), config.Options.Route.Count.ToString());
-                Stat("gil", L.T("Gil comprometido"), runtime.ReservedGil.ToString("N0"));
-                ImGui.EndTable();
-            }
-            ImGui.Spacing();
-            ImGui.TextColored(ImGui.ColorConvertFloat4ToU32(runner.IsRunning ? Gold : new Vector4(.65f, .7f, .77f, 1)), L.T(runner.IsRunning ? "Sessão em andamento" : "Sessão parada"));
-            ImGui.TextWrapped(runner.Status);
-            if (runner.IsRunning && runner.PendingReturnGoal != ReturnGoal.None)
-                ImGui.TextColored(Gold, L.T("{0} atingida. Retorno após o FATE em andamento.", SessionGoals.Label(runner.PendingReturnGoal)));
-            if (runner.Selected is { } active)
-            {
-                DrawFateProgress(active);
-                if (active.EffectiveKind == FateKind.Collection)
-                    ImGui.TextDisabled(L.T("Itens carregados: {0} / lote de {1}", active.HeldItems, config.Options.CollectionBatchSize));
-            }
-            if (runner.Unconfirmed > 0) ImGui.TextDisabled(L.T("Concluídos: {0}  |  Sem confirmação: {1}", runner.Completed, runner.Unconfirmed));
-            if (runner.IsRunning && runner.HasPendingOptions)
-            {
-                if (runner.PendingReturnGoal == ReturnGoal.None)
-                    ImGui.TextWrapped(L.T("Alterações pendentes: serão aplicadas após o FATE ou a ação em andamento."));
-                else ImGui.TextWrapped(L.T("O retorno já foi solicitado. As alterações ficam salvas para a próxima sessão."));
-            }
-            if (runner.IsRunning && runner.OptionsError != null)
-                ImGui.TextWrapped(L.T("Alterações não aplicadas: {0}", runner.OptionsError));
-            ImGui.BeginDisabled(runner.IsRunning);
-            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.37f, .29f, .17f, 1));
-            if (ImGui.Button(L.T("Iniciar") + "###start", new(105, 30))) { Error = null; request("start"); }
-            ImGui.PopStyleColor();
-            ImGui.EndDisabled();
-            ImGui.SameLine();
-            ImGui.BeginDisabled(!runner.IsRunning);
-            if (ImGui.Button(L.T("Parar") + "###stop", new(105, 30))) request("stop");
-            ImGui.EndDisabled();
-            ImGui.SameLine(); ImGui.TextDisabled("/fatepilot stop");
-            if (Error != null) ImGui.TextWrapped(Error);
-            if (runtime.NeedsRecovery && !runner.IsRunning)
-            {
-                ImGui.TextWrapped(L.T("Há ajustes do módulo de posicionamento pendentes de restauração."));
-                if (ImGui.Button(L.T("Restaurar sessão anterior"))) request("recover");
-            }
-            ImGui.Spacing();
-            ImGui.PushItemWidth(220);
-            if (ImGui.BeginTabBar("tabs"))
-            {
-                if (ImGui.BeginTabItem(L.T("Sessão") + "###session")) { DrawSession(); ImGui.EndTabItem(); }
-                if (ImGui.BeginTabItem(L.T("Rota") + "###route")) { DrawRoute(); ImGui.EndTabItem(); }
-                if (ImGui.BeginTabItem(L.T("Gastos") + "###costs")) { DrawCosts(); ImGui.EndTabItem(); }
-                if (ImGui.BeginTabItem(L.T("FATEs") + "###fates")) { DrawFates(); ImGui.EndTabItem(); }
-                if (ImGui.BeginTabItem("Faloop###tracker")) { DrawTracker(); ImGui.EndTabItem(); }
-                if (ImGui.BeginTabItem(L.T("Diagnóstico") + "###diagnostics")) { DrawDiagnostics(); ImGui.EndTabItem(); }
-                if (ImGui.BeginTabItem(L.T("Sobre") + "###about")) { DrawAbout(); ImGui.EndTabItem(); }
-                ImGui.EndTabBar();
-            }
-            ImGui.PopItemWidth();
-        }
-        ImGui.End();
+            if (ImGui.Begin("FatePilot###FatePilotMain", ref open, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) DrawShell();
+            ImGui.End();
+            if (!open && startPrompt) { CancelStart(); request("cancel-start"); }
         }
         finally { ImGui.PopStyleColor(20); ImGui.PopStyleVar(5); }
     }
@@ -121,24 +55,24 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         else ImGui.Dummy(new(size, size));
     }
 
-    private static void Stat(string id, string label, string value)
+    private static void Stat(string id, string label, string value, uint icon)
     {
         ImGui.TableNextColumn();
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12, 8));
-        ImGui.BeginChild(id, new Vector2(0, 66), true, ImGuiWindowFlags.NoScrollbar);
-        ImGui.TextDisabled(label);
-        ImGui.TextColored(ImGui.ColorConvertFloat4ToU32(Gold), value);
-        ImGui.EndChild();
-        ImGui.PopStyleVar();
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 8) * ImGuiHelpers.GlobalScale);
+        ImGui.BeginChild(id, new Vector2(0, 80 * ImGuiHelpers.GlobalScale), true, ImGuiWindowFlags.NoScrollbar);
+        GameIcon(icon, 24); ImGui.SameLine(); ImGui.TextColored(Gold, value);
+        ImGui.TextWrapped(label);
+        ImGui.EndChild(); ImGui.PopStyleVar();
     }
 
     private static void PushTheme()
     {
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(18, 16));
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10, 9));
-        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(9, 6));
-        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5f);
-        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f);
+        var scale = ImGuiHelpers.GlobalScale;
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(14, 12) * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10, 8) * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(9, 5) * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5f * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f * scale);
         ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(.055f, .065f, .085f, .98f));
         ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(.08f, .095f, .12f, 1));
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(.91f, .91f, .89f, 1));
@@ -163,30 +97,44 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     private void DrawSession()
     {
-        var o = config.Options;
-        var language = Array.IndexOf(Localization.Codes, config.Language);
-        ImGui.SetNextItemWidth(220);
-        if (ImGui.Combo(L.T("Idioma"), ref language, Localization.Names, Localization.Names.Length))
+        if (ImGui.BeginTable("sessionStats", 4, ImGuiTableFlags.SizingStretchSame))
         {
-            config.Language = Localization.Codes[language]; Localization.Apply(config.Language); SaveSettings();
+            Stat("complete", L.T("FATEs concluídos"), runner.Completed.ToString(), 60721);
+            Stat("gemstones", L.T("Gemstones obtidas"), runner.GemstonesEarned.ToString("N0"), ItemIcon(26807));
+            Stat("zones", L.T("Zonas na rota"), config.Options.Route.Count.ToString(), AetheryteIcon);
+            Stat("gil", L.T("Gil comprometido"), (runtime.ReservedGil + runner.GreensGilCommitted).ToString("N0"), ItemIcon(1));
+            ImGui.EndTable();
         }
-        ImGui.TextWrapped(L.T("Auto usa o idioma do cliente. Português (Brasil) e espanhol são escolhas manuais."));
-        ImGui.Separator();
+        if (runner.Unconfirmed > 0) ImGui.TextDisabled(L.T("Concluídos: {0}  |  Sem confirmação: {1}", runner.Completed, runner.Unconfirmed));
+        ImGui.Spacing();
+        BeginCard("returnGoals");
+        ImGui.TextColored(Gold, L.T("Metas de retorno"));
+        var o = config.Options;
         var goal = o.ReturnAfterFates;
-        ImGui.SetNextItemWidth(130);
+        ImGui.SetNextItemWidth(130 * ImGuiHelpers.GlobalScale);
         if (ImGui.InputInt(L.T("Voltar após X FATEs (0 = sem meta)"), ref goal)) { o.ReturnAfterFates = Math.Clamp(goal, 0, 9999); SaveSettings(); }
         DrawGoalSettings();
+        GameIcon(AetheryteIcon); ImGui.SameLine();
         if (ImGui.BeginCombo(L.T("Cidade de retorno"), o.ReturnDestination?.Name ?? L.T("Selecionar")))
         {
             foreach (var city in Destinations.Where(d => CityTerritories.Contains(d.TerritoryId)))
                 if (ImGui.Selectable(city.Name, o.ReturnDestination?.AetheryteId == city.AetheryteId)) { o.ReturnDestination = city; SaveSettings(); }
             ImGui.EndCombo();
         }
-        ImGui.TextWrapped(L.T("A meta conta sucessos observados em FATEs dos quais você participou. Desaparecimentos sem confirmação não contam."));
+        DrawGoalProgress();
+        EndCard();
+        BeginCard("travelPreferences");
+        ImGui.TextColored(Gold, L.T("Movimento"));
         var mount = o.UseMount;
         if (ImGui.Checkbox(L.T("Usar montaria"), ref mount)) { o.UseMount = mount; SaveSettings(); }
         var fly = o.UseFlight;
         if (ImGui.Checkbox(L.T("Voar onde estiver desbloqueado"), ref fly)) { o.UseFlight = fly; SaveSettings(); }
+        EndCard();
+    }
+
+    private void DrawEntryFilters()
+    {
+        var o = config.Options;
         var bonus = o.PreferBonus;
         if (ImGui.Checkbox(L.T("Preferir bônus em empate de distância"), ref bonus)) { o.PreferBonus = bonus; SaveSettings(); }
         var above = o.LevelAbovePlayer;
@@ -195,16 +143,12 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         if (ImGui.SliderInt(L.T("Progresso máximo para entrar (%)"), ref progress, 10, 100)) { o.MaximumProgress = progress; SaveSettings(); }
         var time = o.MinimumSecondsLeft;
         if (ImGui.SliderInt(L.T("Tempo restante mínimo (segundos)"), ref time, 0, 600)) { o.MinimumSecondsLeft = time; SaveSettings(); }
-        ImGui.Spacing();
-        DrawGoalProgress();
-        ImGui.TextWrapped(L.T("Antes de iniciar, pare as outras automações de combate, movimento e viagem."));
     }
 
     private void DrawRoute()
     {
-        ImGui.TextWrapped(L.T("Clique nas miniaturas para montar sua rota. A ordem de seleção define a viagem."));
         if (runner.IsRunning) ImGui.TextWrapped(L.T("Edite livremente. As mudanças valem após o FATE ou a ação em andamento."));
-        DrawSelectedRoute();
+        BeginCard("selectedRoute"); DrawSelectedRoute(); EndCard();
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint("###zoneSearch", L.T("Buscar zona ou aetheryte"), ref search, 100);
         foreach (var expansion in zones.GroupBy(z => (z.ExpansionId, z.Expansion)))
@@ -251,6 +195,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             var hubs = Destinations.Where(x => x.TerritoryId == d.TerritoryId).ToArray();
             if (hubs.Length > 1)
             {
+                GameIcon(AetheryteIcon); ImGui.SameLine();
                 ImGui.SetNextItemWidth(-1);
                 if (ImGui.BeginCombo("###hub", d.Name))
                 {
@@ -259,6 +204,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
                     ImGui.EndCombo();
                 }
             }
+            else IconText(AetheryteIcon, d.Name);
             ImGui.PopID();
         }
         if (config.Options.Route.Count == 0) ImGui.TextWrapped(L.T("Rota vazia: apenas a zona atual, sem troca de instância."));
@@ -311,61 +257,94 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     private void DrawFates()
     {
+        BeginCard("fatePreferences");
         var forlorn = config.Options.PrioritizeForlorn;
         if (ImGui.Checkbox(L.T("Priorizar Forlorn Maiden e The Forlorn"), ref forlorn)) { config.Options.PrioritizeForlorn = forlorn; SaveSettings(); }
-        var collection = config.Options.IncludeCollection;
-        if (ImGui.Checkbox(L.T("Incluir FATEs de coleta"), ref collection)) { config.Options.IncludeCollection = collection; SaveSettings(); }
-        var batch = config.Options.CollectionBatchSize;
-        if (ImGui.SliderInt(L.T("Itens por entrega"), ref batch, 1, 30)) { config.Options.CollectionBatchSize = batch; SaveSettings(); }
-        ImGui.TextWrapped(L.T("Entrega ao atingir o lote, após 45 segundos com itens ou perto do fim do FATE."));
-        var escort = config.Options.IncludeEscort;
-        if (ImGui.Checkbox(L.T("Incluir FATEs de escolta"), ref escort)) { config.Options.IncludeEscort = escort; SaveSettings(); }
         var groupBosses = config.Options.ExcludeGroupBosses;
         if (ImGui.Checkbox(L.T("Ignorar chefes de grupo conhecidos (Daivadipa, Chi e similares)"), ref groupBosses)) { config.Options.ExcludeGroupBosses = groupBosses; SaveSettings(); }
-        ImGui.Separator();
-        foreach (var f in World.Fates)
+        if (ImGui.CollapsingHeader(L.T("Tipos de FATE e filtros") + "###fateFilters"))
         {
-            ImGui.PushID(f.Id);
-            var excluded = config.Options.ExcludedFates.Contains(f.Id);
-            if (ImGui.Checkbox("##excluded", ref excluded))
-            {
-                if (excluded) config.Options.ExcludedFates.Add(f.Id); else config.Options.ExcludedFates.Remove(f.Id);
-                SaveSettings();
-            }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Ignorar este FATE"));
-            ImGui.SameLine();
-            ImGui.BeginGroup();
-            ImGui.TextWrapped($"Lv {f.Level}  {f.Name}");
-            DrawFateProgress(f);
-            ImGui.EndGroup();
-            if (config.Options.ExcludeGroupBosses && FateRules.IsGroupBoss(f.Id)) ImGui.TextDisabled(L.T("Chefe de grupo: ignorado automaticamente."));
-            ImGui.PopID();
+            var collection = config.Options.IncludeCollection;
+            if (ImGui.Checkbox(L.T("Incluir FATEs de coleta"), ref collection)) { config.Options.IncludeCollection = collection; SaveSettings(); }
+            var batch = config.Options.CollectionBatchSize;
+            if (ImGui.SliderInt(L.T("Itens por entrega"), ref batch, 1, 30)) { config.Options.CollectionBatchSize = batch; SaveSettings(); }
+            Help(L.T("Entrega ao atingir o lote, após 45 segundos com itens ou perto do fim do FATE."));
+            var escort = config.Options.IncludeEscort;
+            if (ImGui.Checkbox(L.T("Incluir FATEs de escolta"), ref escort)) { config.Options.IncludeEscort = escort; SaveSettings(); }
+            ImGui.Separator(); DrawEntryFilters();
         }
+        EndCard();
+        BeginCard("visibleFates");
+        ImGui.TextColored(Gold, L.T("FATEs nesta zona"));
+        DrawFateRows();
         if (World.Fates.Count == 0) ImGui.TextUnformatted(L.T("Nenhum FATE visível nesta zona."));
         if (config.Options.ExcludedFates.Count > 0 && ImGui.Button(L.T("Limpar lista de ignorados"))) { config.Options.ExcludedFates.Clear(); SaveSettings(); }
+        EndCard();
+    }
+
+    private void DrawFateRows()
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var wide = ImGui.GetContentRegionAvail().X >= 620 * scale;
+        if (!ImGui.BeginTable("fateRows", wide ? 4 : 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg)) return;
+        ImGui.TableSetupColumn("enabled", ImGuiTableColumnFlags.WidthFixed, 24 * scale);
+        ImGui.TableSetupColumn("icon", ImGuiTableColumnFlags.WidthFixed, 36 * scale);
+        ImGui.TableSetupColumn("event", ImGuiTableColumnFlags.WidthStretch);
+        if (wide) ImGui.TableSetupColumn("progress", ImGuiTableColumnFlags.WidthFixed, 220 * scale);
+        foreach (var f in World.Fates.OrderBy(f => System.Numerics.Vector3.DistanceSquared(World.Position, f.Position)))
+        {
+            ImGui.PushID(f.Id); ImGui.TableNextRow(ImGuiTableRowFlags.None, 64 * scale);
+            ImGui.TableNextColumn();
+            var groupBoss = config.Options.ExcludeGroupBosses && FateRules.IsGroupBoss(f.Id);
+            var included = !groupBoss && !config.Options.ExcludedFates.Contains(f.Id);
+            ImGui.BeginDisabled(groupBoss);
+            if (ImGui.Checkbox("##included", ref included))
+            {
+                if (included) config.Options.ExcludedFates.Remove(f.Id); else config.Options.ExcludedFates.Add(f.Id);
+                SaveSettings();
+            }
+            ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(L.T(groupBoss ? "Chefe de grupo: ignorado automaticamente." : "Participar deste FATE"));
+            ImGui.TableNextColumn(); GameIcon(FateIcon(f.Id), 32);
+            ImGui.TableNextColumn();
+            if (runner.Selected?.Id == f.Id) ImGui.PushStyleColor(ImGuiCol.Text, Gold);
+            ImGui.TextWrapped(f.Name);
+            if (runner.Selected?.Id == f.Id) ImGui.PopStyleColor();
+            ImGui.TextDisabled($"Lv {f.Level}" + (f.Bonus ? "  + " + L.T("Bônus") : ""));
+            if (wide) ImGui.TableNextColumn();
+            DrawFateProgress(f);
+            ImGui.PopID();
+        }
+        ImGui.EndTable();
     }
 
     private void DrawCosts()
     {
+        DrawGreensSettings();
+        BeginCard("teleportCosts");
+        ImGui.TextColored(Gold, L.T("Gastos de viagem"));
+        if (ImGui.BeginTable("travelStats", 3, ImGuiTableFlags.SizingStretchSame))
+        {
+            Stat("tickets", L.T("Tickets na bolsa"), TicketCount.ToString("N0"), ItemIcon(7569));
+            Stat("usedTickets", L.T("Tickets consumidos"), runtime.UsedTickets.ToString("N0"), ItemIcon(7569));
+            Stat("travelGil", L.T("Gil comprometido"), runtime.ReservedGil.ToString("N0"), ItemIcon(1));
+            ImGui.EndTable();
+        }
         var o = config.Options;
         var tickets = o.UseTickets;
         if (ImGui.Checkbox(L.T("Usar Aetheryte Tickets"), ref tickets)) { o.UseTickets = tickets; SaveSettings(); }
-        ImGui.TextWrapped(L.T("Quando ativado, usa o ticket no lugar do gil em teleportes pagos. Destinos gratuitos não gastam tickets."));
+        Help(L.T("Quando ativado, usa o ticket no lugar do gil em teleportes pagos. Destinos gratuitos não gastam tickets."));
         ImGui.BeginDisabled(!o.UseTickets);
         var minimum = o.TicketMinimumFare;
         if (ImGui.InputInt(L.T("Usar ticket a partir de (gil)"), ref minimum)) { o.TicketMinimumFare = Math.Max(0, minimum); SaveSettings(); }
         var fallback = o.PayGilWhenTicketsRunOut;
         if (ImGui.Checkbox(L.T("Continuar pagando gil quando os tickets acabarem"), ref fallback)) { o.PayGilWhenTicketsRunOut = fallback; SaveSettings(); }
-        ImGui.TextWrapped(L.T("Desativado: para quando faltar ticket. Abaixo do valor mínimo, o pagamento é em gil."));
+        Help(L.T("Desativado: para quando faltar ticket. Abaixo do valor mínimo, o pagamento é em gil."));
         ImGui.EndDisabled();
         var budget = o.MaximumTeleportGil;
         if (ImGui.InputInt(L.T("Limite de gil por sessão (0 = sem limite)"), ref budget)) { o.MaximumTeleportGil = Math.Max(0, budget); SaveSettings(); }
-        ImGui.Separator();
-        ImGui.TextUnformatted(L.T("Tickets no inventário: {0}", TicketCount));
-        ImGui.TextUnformatted(L.T("Tickets consumidos: {0}", runtime.UsedTickets));
-        ImGui.TextUnformatted(L.T("Gil comprometido nos teleportes: {0}", runtime.ReservedGil));
-        ImGui.TextWrapped(L.T("O limite inclui a volta à cidade. Um teleporte aceito reserva o custo, mesmo se for cancelado depois."));
-        DrawGreensSettings();
+        Help(L.T("O limite inclui a volta à cidade. Um teleporte aceito reserva o custo, mesmo se for cancelado depois."));
+        EndCard();
     }
 
     public int TicketCount { get; set; }

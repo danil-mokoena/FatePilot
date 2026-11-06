@@ -25,9 +25,13 @@ internal sealed partial class MainWindow
             ImGui.SetNextItemWidth(130);
             if (ImGui.InputInt(L.T("Espaço livre reservado"), ref reserve))
             { o.GemstoneCapReserve = Math.Clamp(reserve, 0, 1000000); SaveSettings(); }
-            ImGui.TextWrapped(L.T("O FATE atual será concluído. Reserve espaço para a recompensa final; não há garantia contra excesso."));
+            Help(L.T("O FATE atual será concluído. Reserve espaço para a recompensa final; não há garantia contra excesso."));
         }
-        ImGui.TextWrapped(L.T("A primeira meta atingida solicita o retorno após o FATE atual e suas entregas. O saldo inicial não conta como ganho."));
+        if (ImGui.CollapsingHeader(L.T("Como as metas funcionam") + "###goalHelp"))
+        {
+            ImGui.TextWrapped(L.T("A primeira meta atingida solicita o retorno após o FATE atual e suas entregas. O saldo inicial não conta como ganho."));
+            ImGui.TextWrapped(L.T("A meta conta sucessos observados em FATEs dos quais você participou. Desaparecimentos sem confirmação não contam."));
+        }
     }
 
     private void DrawGoalProgress()
