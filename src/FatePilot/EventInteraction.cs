@@ -166,11 +166,21 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         var expected = npc.ObjectKind == ObjectKind.EventNpc
             ? Services.Data.GetExcelSheet<ENpcResident>().GetRowOrDefault(npc.BaseId)?.Singular.ExtractText()
             : npc is IBattleNpc b ? Services.Data.GetExcelSheet<BNpcName>().GetRowOrDefault(b.NameId)?.Singular.ExtractText() : null;
-        var ui = UIModule.Instance();
-        var speakerMatches = talk && ui != null && !string.IsNullOrEmpty(expected) &&
-            string.Equals(expected, ui->LastTalkName.ToString(), StringComparison.OrdinalIgnoreCase);
-        localEvidence = $"local bound={bound}; speakerMatch={speakerMatches}; callbackPresent={receiver != 0}; talk={talk}; yesNo={yesNo}";
+        var speaker = talk ? TalkSpeaker() : null;
+        var speakerMatches = DialogueSpeaker.Matches(expected, speaker);
+        localEvidence = $"local bound={bound}; speakerAvailable={!string.IsNullOrWhiteSpace(speaker)}; speakerMatch={speakerMatches}; callbackPresent={receiver != 0}; talk={talk}; yesNo={yesNo}";
         return localDialogue.Observe(globalsEmpty, bound, talk, speakerMatches, yesNo, receiver, Now);
+    }
+
+    private static string? TalkSpeaker()
+    {
+        var talk = (AddonTalk*)Services.GameGui.GetAddonByName("Talk").Address;
+        if (talk == null || !talk->IsVisible || !talk->IsReady) return null;
+        // The Talk header is the live speaker. UIModule.LastTalkName can be stale or
+        // empty for a local NPC conversation and must not decide its ownership.
+        var name = talk->AtkTextNode220;
+        if (name == null || name->NodeText.StringPtr.Value == null || name->NodeText.BufUsed is < 2 or > 513) return null;
+        return Dalamud.Game.Text.SeStringHandling.SeString.Parse(name->NodeText.AsSpan()).TextValue;
     }
 
     public void Advance()
