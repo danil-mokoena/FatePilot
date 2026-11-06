@@ -12,7 +12,8 @@ public static class Selection
             && f.Level <= w.Level + o.LevelAbovePlayer && f.Progress < o.MaximumProgress
             && (f.State == EventState.Preparing || f.SecondsLeft >= o.MinimumSecondsLeft) && !o.ExcludedFates.Contains(f.Id)
             && (!excludedUntil.TryGetValue(Key(f, w), out var until) || until <= now))
-        .OrderBy(f => Vector3.Distance(w.Position, f.Position) - (o.PreferBonus && f.Bonus ? 250 : 0))
+        .OrderBy(f => Vector3.Distance(w.Position, f.Position))
+        .ThenByDescending(f => o.PreferBonus && f.Bonus)
         .ThenBy(f => f.Id).FirstOrDefault();
 
     public static int? NextInstance(int current, int count, ISet<int> visited)

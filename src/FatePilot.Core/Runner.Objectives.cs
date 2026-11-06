@@ -12,6 +12,7 @@ public sealed partial class Runner
     private int interactionAttempts;
     private double heldSince;
     private bool delivering;
+    private double lastStarterDiagnostic = -100;
 
     private void ResetObjectives(FateInfo fate, double now)
     {
@@ -25,6 +26,7 @@ public sealed partial class Runner
         interactionAttempts = 0;
         heldSince = fate.HeldItems > 0 ? now : -1;
         delivering = false;
+        lastStarterDiagnostic = now - 10;
         runtime.CancelEventInteraction();
     }
 
@@ -41,6 +43,12 @@ public sealed partial class Runner
         if (w.InCombat) { DefendObjective(w, f); return; }
         var npc = w.Objectives.FirstOrDefault(a => a.FateId == f.Id && a.Role == ObjectiveRole.Starter);
         if (npc != null) ApproachAndInteract(w, npc, now);
+        else if (now - lastStarterDiagnostic >= 10)
+        {
+            lastStarterDiagnostic = now;
+            Status = L.T("Aguardando identificação do NPC deste FATE.");
+            runtime.Log(Status + " " + f.ObjectiveDiagnostic);
+        }
         if (now - since > 60) SkipOrFail(L.T("Não foi possível iniciar o FATE pelo NPC."), now);
     }
 
@@ -79,7 +87,7 @@ public sealed partial class Runner
         {
             var recipient = actors.FirstOrDefault(a => a.Role == ObjectiveRole.Recipient);
             delivering |= f.HeldItems > 0 && (f.HeldItems >= options.CollectionBatchSize ||
-                (heldSince >= 0 && now - heldSince >= 45) || f.SecondsLeft < 90 || f.Progress >= 80 || f.State == EventState.Ending);
+                PendingReturnGoal != ReturnGoal.None || (heldSince >= 0 && now - heldSince >= 45) || f.SecondsLeft < 90 || f.Progress >= 80 || f.State == EventState.Ending);
             if (delivering && f.HeldItems > 0 && recipient != null && !w.InCombat)
             {
                 Status = L.T("Entregando itens do FATE: {0}", f.HeldItems);

@@ -1,7 +1,10 @@
 namespace FatePilot.Core;
 
 public enum InteractionStatus { None, Waiting, Owned, Foreign, Expired }
-public readonly record struct EventSignal(ulong ObjectId, uint EventId);
+public readonly record struct EventSignal(ulong ObjectId, uint EventId)
+{
+    public bool IsEmpty => EventId == 0 && ObjectId is 0 or 0xE0000000;
+}
 
 // Occupied can be raised before the native event context is populated. During that
 // short window we wait without issuing callbacks; ownership still requires both IDs.
@@ -11,6 +14,7 @@ public sealed class InteractionLease
     private uint[] events = [];
     private double started;
     private bool observed;
+    private double lastOwned;
     public bool Active => actor != 0;
 
     public void Begin(ulong actorId, IEnumerable<uint> eventIds, double now)
@@ -19,20 +23,24 @@ public sealed class InteractionLease
         events = eventIds.Where(id => id != 0).Distinct().ToArray();
         started = now;
         observed = false;
+        lastOwned = double.NegativeInfinity;
     }
 
-    public InteractionStatus Observe(double now, bool occupiedOrDialog, EventSignal first, EventSignal second, bool matchingSelector, ulong sceneObject = 0)
+    public InteractionStatus Observe(double now, bool occupiedOrDialog, EventSignal first, EventSignal second, bool matchingSelector, ulong sceneObject = 0, bool matchingLocalDialog = false)
     {
         if (!Active) return InteractionStatus.None;
         if (now - started >= 15) { Cancel(); return InteractionStatus.Expired; }
         if (!occupiedOrDialog && !matchingSelector)
         {
+            if (observed && now - lastOwned < 1) return InteractionStatus.Waiting;
             if (observed || now - started >= 3) { Cancel(); return InteractionStatus.None; }
             return InteractionStatus.Waiting;
         }
-        if (Matches(first, sceneObject) || Matches(second, sceneObject) || matchingSelector)
+        if (Matches(first, sceneObject) || Matches(second, sceneObject) || matchingSelector ||
+            (matchingLocalDialog && first.IsEmpty && second.IsEmpty && sceneObject is 0 or 0xE0000000))
         {
             observed = true;
+            lastOwned = now;
             return InteractionStatus.Owned;
         }
         if (!observed && now - started < 3) return InteractionStatus.Waiting;

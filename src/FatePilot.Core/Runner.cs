@@ -11,6 +11,9 @@ public sealed partial class Runner(IRuntime runtime)
     public int Completed { get; private set; }
     public int Unconfirmed { get; private set; }
     public int GemstonesEarned { get; private set; }
+    public double ElapsedSeconds { get; private set; }
+    public ReturnGoal PendingReturnGoal { get; private set; }
+    private double sessionStarted;
     private int previousGemstones;
     public FateInfo? Selected { get; private set; }
     public bool IsRunning => State is not (RunState.Stopped or RunState.Finished or RunState.Faulted);
@@ -35,11 +38,18 @@ public sealed partial class Runner(IRuntime runtime)
         {
             options = JsonSerializer.Deserialize<RunOptions>(JsonSerializer.Serialize(config))!;
             options.Validate();
+            if (options.AvoidGemstoneCap && (world.GemstoneCap <= 0 || options.GemstoneCapReserve >= world.GemstoneCap))
+                throw new InvalidOperationException(L.T("O limite de gemstones não está disponível ou a reserva é maior que o limite."));
             if (!world.LoggedIn || world.Loading || world.Dead || world.Restricted || world.InCombat || world.Occupied || world.DialogueOpen || world.Casting)
                 throw new InvalidOperationException(L.T("Inicie em mundo aberto, vivo, fora de combate e com os diálogos fechados."));
             runtime.Begin(options);
             Completed = Unconfirmed = 0;
             GemstonesEarned = 0;
+            ElapsedSeconds = 0;
+            PendingReturnGoal = ReturnGoal.None;
+            sessionStarted = now;
+            ResetRestock();
+            pendingOptions = null; OptionsError = null;
             previousGemstones = world.Gemstones;
             Selected = null;
             visited.Clear();
@@ -72,6 +82,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (!IsRunning) return;
         try
         {
+            ElapsedSeconds = Math.Max(ElapsedSeconds, now - sessionStarted);
             if (w.LoggedIn && !w.Loading)
             {
                 GemstonesEarned += Math.Max(0, w.Gemstones - previousGemstones);
@@ -81,6 +92,15 @@ public sealed partial class Runner(IRuntime runtime)
             if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
             if (w.Job != 0 && w.Job != sessionJob) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
+            ApplyPendingOptions(w);
+            if (w.LoggedIn && !w.Loading && options.AvoidGemstoneCap && w.GemstoneCap <= 0)
+            { Stop(L.T("Não foi possível consultar o limite de gemstones."), true); return; }
+            if (PendingReturnGoal == ReturnGoal.None)
+            {
+                PendingReturnGoal = SessionGoals.Evaluate(options, Completed, GemstonesEarned, ElapsedSeconds, w.Gemstones, w.GemstoneCap);
+                if (PendingReturnGoal != ReturnGoal.None)
+                    runtime.Log(L.T("{0} atingida. Retorno após o FATE em andamento.", SessionGoals.Label(PendingReturnGoal)));
+            }
 
             if (State == RunState.Teleporting) { TickTeleport(w, now); return; }
             if (State == RunState.InstanceChange) { TickInstance(w, now); return; }
@@ -89,6 +109,7 @@ public sealed partial class Runner(IRuntime runtime)
             if (w.TravelBusy) { Stop(L.T("módulo de viagens iniciou outra tarefa durante a sessão."), true); return; }
             if (options.ExcludeGroupBosses && w.Enemies.Any(e => e.TargetingPlayer && FateRules.IsGroupBoss(e.FateId)))
             { Stop(L.T("Um chefe de grupo entrou em combate com você. Sessão interrompida.")); return; }
+            if (State == RunState.Restocking) { TickRestock(w, now); return; }
             if (w.EventInteractionError != null) { Stop(w.EventInteractionError); return; }
             if (Selected != null && (w.OwnEventInteraction || w.EventInteractionPending))
             {
@@ -107,6 +128,9 @@ public sealed partial class Runner(IRuntime runtime)
                 Stop(L.T("Um diálogo ou outra interação interrompeu a sessão.")); return;
             }
             if (w.NavError != null) { SkipOrFail(L.T("Navegação: {0}", w.NavError), now); return; }
+            if (HandleUnexpectedCombat(w, now)) return;
+            if (PendingReturnGoal != ReturnGoal.None && State == RunState.HubApproach)
+            { nextInstance = 0; runtime.StopMovement(); Enter(RunState.Selecting, SessionGoals.Label(PendingReturnGoal), now); }
 
             switch (State)
             {
@@ -134,12 +158,13 @@ public sealed partial class Runner(IRuntime runtime)
             return;
         }
         runtime.SetCombat(false);
-        if (options.ReturnAfterFates > 0 && Completed >= options.ReturnAfterFates)
+        if (PendingReturnGoal != ReturnGoal.None)
         {
             returning = true;
             Teleport(options.ReturnDestination!, w, now);
             return;
         }
+        if (TryRestock(w, now)) return;
         if (options.Route.Count > 0 && options.Route.All(d => d.TerritoryId != w.Territory))
         {
             Teleport(options.Route[0], w, now);
@@ -267,7 +292,6 @@ public sealed partial class Runner(IRuntime runtime)
         if (f.State == EventState.Preparing) { Enter(RunState.StartingEvent, L.T("Iniciando o FATE pelo NPC."), now); return; }
         if (w.CurrentFate != f.Id)
         {
-            if (w.InCombat) { Stop(L.T("Combate começou fora do FATE selecionado."), true); return; }
             runtime.Move(f.Position, false);
             lastPosition = w.Position; lastMotion = now;
             Enter(RunState.Moving, L.T("Entrando no limite do FATE."), now);
@@ -295,6 +319,9 @@ public sealed partial class Runner(IRuntime runtime)
             Enter(RunState.Syncing, L.T("Retornando ao limite do FATE."), now);
             return;
         }
+        if (now - since > 1200) { Stop(L.T("Tempo máximo de combate excedido."), true); return; }
+        if (TryPriorityEnemy(w, f, now)) return;
+        Status = L.T("Participando de {0}", f.Name);
         if (f.EffectiveKind is FateKind.Collection or FateKind.Escort or FateKind.Defense)
         {
             TickObjective(w, f, now);
@@ -314,7 +341,6 @@ public sealed partial class Runner(IRuntime runtime)
             runtime.SetCombat(false);
             if (now - noEnemySince > 60) SkipOrFail(L.T("Nenhum inimigo elegível apareceu em 60 segundos."), now);
         }
-        if (now - since > 1200) Stop(L.T("Tempo máximo de combate excedido."), true);
     }
 
     private void Teleport(Destination destination, World w, double now)
@@ -322,7 +348,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (w.InCombat || w.Casting || w.Occupied) return;
         if (w.Mounted || w.Flying)
         {
-            if (Throttle(now, 2)) runtime.Dismount();
+            if (Throttle(now, 2)) { transitionUntil = now + 5; runtime.Dismount(); }
             if (now - since > 60) Stop(L.T("Desmonte antes do teleporte."), true);
             return;
         }
@@ -346,10 +372,22 @@ public sealed partial class Runner(IRuntime runtime)
         {
             runtime.End();
             State = RunState.Finished;
-            Status = L.T("Meta de {0} FATEs atingida. Retorno concluído.", Completed);
+            Status = L.T("Retorno concluído: {0}.", SessionGoals.Label(PendingReturnGoal));
             runtime.Log(Status);
             return;
         }
+        if (restockStage == RestockStage.ToVendor)
+        {
+            restockStage = RestockStage.Approach; lastMotion = now; lastPosition = w.Position;
+            Enter(RunState.Restocking, L.T("Aproximando do vendedor de Gysahl Greens."), now);
+            return;
+        }
+        if (restockStage == RestockStage.ToRoute)
+        {
+            restockStage = RestockStage.None;
+            nextInstance = restockInstance > 0 && restockInstance != w.Instance && restockInstance <= w.InstanceCount ? restockInstance : 0;
+        }
+        if (PendingReturnGoal != ReturnGoal.None) nextInstance = 0;
         if (nextInstance > 0)
         {
             lastPosition = w.Position; lastMotion = now;
