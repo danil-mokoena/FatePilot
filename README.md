@@ -5,17 +5,17 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.6.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.6.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
 
 ### New in 0.6
 
 - **Achievements page.** Every open-world FATE achievement from the game data, in your client language, grouped like the in-game log:
-  - *Bosses and specific FATEs* (37, e.g. Mischief Managed, Don't Go into the Light, Terrible Ttokrrone): each is linked to the FATE it names. **Prioritize** makes FatePilot pick that FATE first whenever it is up; the route button sets the route to its zone once the zone is known.
+  - *Bosses and specific FATEs* (37, e.g. Mischief Managed, Don't Go into the Light, Terrible Ttokrrone): each is linked to the FATE it names. **Prioritize** makes FatePilot pick that FATE first whenever it is up; the route button sets the route to its zone. Each FATE's zone is resolved from the game's own layout files (all 41 FATEs behind the 37 boss achievements resolve).
   - *By zone* (18 Free Market Friend achievements, shared FATE rank 3 in Shadowbringers/Endwalker and rank 4 in Dawntrail): one click sets the route to that zone.
   - *FATE counts* (Date with Destiny and Destiny's Child) with "current of total" progress bars.
   - Search, "hide earned", and "N to go" per group. Completion and progress come from the game itself; open the in-game Achievements window once per login so the game loads them.
 - **Prioritized FATEs** are chosen before nearer ones (the ignore list still wins).
-- **FATE zones are learned** whenever a FATE is seen, because the game data does not link FATEs to zones.
+- **FATE zones** are read from the game's layout files (the FATE's location id is matched in each zone's event layout), so routes work immediately; zones seen during sessions are also remembered.
 
 Spawn timers for boss FATEs are not available: the game does not expose them and community trackers have no supported public API. The Faloop page keeps the click-only link for your world.
 
