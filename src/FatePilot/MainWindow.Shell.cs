@@ -9,7 +9,7 @@ namespace FatePilot;
 
 internal sealed partial class MainWindow
 {
-    private enum Page { Session, Route, Fates, Jobs, Inventory, Supplies, Tracker, Diagnostics, About, Settings }
+    private enum Page { Session, Route, Fates, Achievements, Jobs, Inventory, Supplies, Tracker, Diagnostics, About, Settings }
     private Page page;
     private bool startPrompt, openStartPopup;
     private static readonly Stack<(Vector2 Origin, float Width)> cards = new();
@@ -29,6 +29,7 @@ internal sealed partial class MainWindow
         NavItem(Page.Session, FontAwesomeIcon.Compass, L.T("Sessão"));
         NavItem(Page.Route, FontAwesomeIcon.Route, L.T("Rota"));
         NavItem(Page.Fates, FontAwesomeIcon.Flag, L.T("FATEs"));
+        NavItem(Page.Achievements, FontAwesomeIcon.Trophy, L.T("Conquistas"));
         NavSection(L.T("PERSONAGEM"));
         NavItem(Page.Jobs, FontAwesomeIcon.UserShield, L.T("Classes"));
         NavItem(Page.Inventory, FontAwesomeIcon.BoxOpen, L.T("Inventário"));
@@ -72,6 +73,7 @@ internal sealed partial class MainWindow
             case Page.Session: PageTitle(L.T("Sessão"), L.T("Metas e acompanhamento da sua jornada.")); DrawSession(); break;
             case Page.Route: PageTitle(L.T("Rota"), L.T("Escolha os destinos na ordem em que deseja visitá-los.")); DrawRoute(); break;
             case Page.Fates: PageTitle(L.T("FATEs"), L.T("Eventos da zona, progresso e prioridades.")); DrawFates(); break;
+            case Page.Achievements: PageTitle(L.T("Conquistas"), L.T("Conquistas de FATE, progresso e atalhos para a rota.")); DrawAchievements(); break;
             case Page.Inventory: PageTitle(L.T("Inventário"), L.T("Reparo, comida e limites da bolsa.")); DrawInventory(); break;
             case Page.Jobs: PageTitle(L.T("Classes"), L.T("Fila de classes por nível, com troca automática de gearset.")); DrawJobs(); break;
             case Page.Supplies: PageTitle(L.T("Suprimentos"), L.T("Estoque, reposição e gastos de viagem.")); DrawCosts(); break;

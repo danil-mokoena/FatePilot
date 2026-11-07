@@ -105,6 +105,12 @@ public sealed class Plugin : IDalamudPlugin
             runtime.Update(world);
             if ((oldState == RunState.InstanceChange || oldState == RunState.Gateway) && runner.State != oldState) runtime.AcknowledgeTravelComplete();
             window.World = world;
+            // Learn which zone each seen FATE belongs to (used by the Achievements page).
+            var learned = false;
+            foreach (var f in world.Fates)
+                if (f.TerritoryId != 0 && !config.FateZones.ContainsKey(f.Id)) { config.FateZones[f.Id] = f.TerritoryId; learned = true; }
+            if (learned) config.Save();
+            if (window.AchievementsVisible) window.Achievements.Tick();
             window.Messages = runtime.Messages;
             window.TicketCount = runtime.TicketCount;
         }
