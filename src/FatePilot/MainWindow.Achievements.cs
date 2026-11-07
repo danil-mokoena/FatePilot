@@ -16,6 +16,7 @@ internal sealed partial class MainWindow
     private readonly HashSet<AchievementGroup> collapsedGroups = [];
     private bool hideCompleted = true;
     private string achievementSearch = "";
+    private readonly Dictionary<uint, float> achievementRowHeights = [];
 
     private static string GroupLabel(AchievementGroup g) => g switch
     {
@@ -104,9 +105,16 @@ internal sealed partial class MainWindow
             ImGui.PushID((int)a.Id);
             ImGui.TableNextRow(ImGuiTableRowFlags.None, 46 * scale);
             ImGui.TableNextColumn();
+            // Small breathing room at the top of every row.
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 4 * scale);
             var rowTop = ImGui.GetCursorPosY();
+            // The icon is centred against the text height measured on the previous frame.
+            var iconSize = 36 * scale;
+            var knownHeight = achievementRowHeights.GetValueOrDefault(a.Id, iconSize);
+            ImGui.SetCursorPosY(rowTop + Math.Max(0, (knownHeight - iconSize) / 2));
             GameIcon(a.Icon, 36);
             ImGui.SameLine();
+            ImGui.SetCursorPosY(rowTop);
             ImGui.BeginGroup();
             ImGui.TextColored(a.Complete ? Success : ImGui.GetStyle().Colors[(int)ImGuiCol.Text], a.Name);
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
@@ -121,7 +129,10 @@ internal sealed partial class MainWindow
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(a.Description);
             // The row is as tall as the name + wrapped description (+ zone); the other
             // columns are centred vertically against that height instead of hugging the top.
-            var rowHeight = Math.Max(ImGui.GetItemRectSize().Y, 36 * scale);
+            var rowHeight = Math.Max(ImGui.GetItemRectSize().Y, iconSize);
+            achievementRowHeights[a.Id] = rowHeight;
+            ImGui.SetCursorPosY(rowTop + rowHeight);
+            ImGui.Dummy(new Vector2(0, 4 * scale)); // matching breathing room at the bottom
             void CenterIn(float contentHeight) => ImGui.SetCursorPosY(rowTop + Math.Max(0, (rowHeight - contentHeight) / 2));
 
             ImGui.TableNextColumn();

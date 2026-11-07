@@ -169,6 +169,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         var fly = o.UseFlight;
         if (ImGui.Checkbox(L.T("Voar onde estiver desbloqueado"), ref fly)) { o.UseFlight = fly; SaveSettings(); }
         EndCard();
+        DrawZoneHistory();
     }
 
     private void DrawEntryFilters()
@@ -188,6 +189,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     {
         if (runner.IsRunning) ImGui.TextWrapped(L.T("Edite livremente. As mudanças valem após o FATE ou a ação em andamento."));
         DrawProfiles();
+        DrawLevelRoute();
         BeginCard("selectedRoute"); DrawSelectedRoute(); EndCard();
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint("###zoneSearch", L.T("Buscar zona ou aetheryte"), ref search, 100);
@@ -206,6 +208,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             }
         }
         ImGui.Spacing();
+        DrawRouteTiming();
         ImGui.Separator();
         var instances = config.Options.RotateInstances;
         if (ImGui.Checkbox(L.T("Visitar outras instâncias antes da próxima zona"), ref instances)) { config.Options.RotateInstances = instances; SaveSettings(); }
@@ -329,6 +332,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         if (ImGui.Checkbox(L.T("Priorizar Forlorn Maiden e The Forlorn"), ref forlorn)) { config.Options.PrioritizeForlorn = forlorn; SaveSettings(); }
         var groupBosses = config.Options.ExcludeGroupBosses;
         if (ImGui.Checkbox(L.T("Ignorar chefes de grupo conhecidos (Daivadipa, Chi e similares)"), ref groupBosses)) { config.Options.ExcludeGroupBosses = groupBosses; SaveSettings(); }
+        DrawRewardOptions();
         if (ImGui.CollapsingHeader(L.T("Tipos de FATE e filtros") + "###fateFilters"))
         {
             var collection = config.Options.IncludeCollection;

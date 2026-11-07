@@ -20,5 +20,7 @@ public sealed class Configuration : IPluginConfiguration
     public List<RouteProfile> Profiles { get; set; } = [];
     // FATE id → zone, learned whenever a FATE is seen (the game data has no direct link).
     public Dictionary<ushort, uint> FateZones { get; set; } = [];
+    // Local per-zone farming history (0.7).
+    public ZoneHistory History { get; set; } = new();
     public void Save() => Services.Plugin.SavePluginConfig(this);
 }

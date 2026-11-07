@@ -200,16 +200,35 @@ internal sealed partial class MainWindow
         var columns = Math.Clamp((int)(CardWidth() / (230 * ImGuiHelpers.GlobalScale)), 1, 3);
         if (Gearsets.Count > 0 && ImGui.BeginTable("gearsetGrid", columns, ImGuiTableFlags.SizingStretchSame, new Vector2(CardWidth(), 0)))
         {
+            levelCatalog.EnsureBuilt();
+            var scale = ImGuiHelpers.GlobalScale;
             foreach (var g in Gearsets)
             {
                 ImGui.TableNextColumn();
                 ImGui.PushID(g.Index);
+                // Fixed layout per cell: job icon and two text lines centred together, and the
+                // two buttons always in the same right-hand column, one under the other row to row.
+                var cellLeft = ImGui.GetCursorPosX();
+                var cellWidth = ImGui.GetContentRegionAvail().X;
+                var top = ImGui.GetCursorPosY() + 3 * scale;
+                var textHeight = ImGui.GetTextLineHeight() * 2 + ImGui.GetStyle().ItemSpacing.Y;
+                var iconSize = 28 * scale;
+                ImGui.SetCursorPos(new Vector2(cellLeft, top + Math.Max(0, (textHeight - iconSize) / 2)));
                 GameIcon(JobIcon(g.Job), 28);
                 ImGui.SameLine();
+                ImGui.SetCursorPosY(top);
                 ImGui.BeginGroup();
                 ImGui.TextUnformatted(g.Name);
                 ImGui.TextDisabled(L.T("Nível {0} · gearset {1}", g.Level, g.Index + 1));
                 ImGui.EndGroup();
+                var buttons = (IconButtonWidth(FontAwesomeIcon.Route) + IconButtonWidth(FontAwesomeIcon.Plus)) * 1.15f + ImGui.GetStyle().ItemSpacing.X;
+                ImGui.SetCursorPos(new Vector2(cellLeft + Math.Max(0, cellWidth - buttons), top + Math.Max(0, (textHeight - ImGui.GetFrameHeight()) / 2)));
+                var hasRoute = levelCatalog.Best(g.Level, o.LevelAbovePlayer, Destinations).Count > 0;
+                ImGui.BeginDisabled(!hasRoute || g.Level >= 100);
+                if (ImGuiComponents.IconButton(FontAwesomeIcon.Route)) ApplyLevelRoute(g.Level);
+                ImGui.EndDisabled();
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(g.Level >= 100 ? L.T("Nível máximo.") : L.T("Montar a rota com as zonas de FATEs para o nível {0}", g.Level));
                 ImGui.SameLine();
                 var queued = o.JobQueue.Any(j => j.Gearset == g.Index);
                 ImGui.BeginDisabled(queued);
@@ -217,6 +236,8 @@ internal sealed partial class MainWindow
                 { o.JobQueue.Add(new JobGoal { Gearset = g.Index, Job = g.Job, Name = g.Name, TargetLevel = Math.Min(100, Math.Max(g.Level + 1, 100)) }); SaveSettings(); }
                 ImGui.EndDisabled();
                 if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(L.T(queued ? "Já está na fila" : "Adicionar à fila"));
+                ImGui.SetCursorPosY(top + textHeight + 6 * scale);
+                ImGui.Dummy(Vector2.Zero);
                 ImGui.PopID();
             }
             ImGui.EndTable();

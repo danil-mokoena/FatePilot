@@ -52,6 +52,15 @@ internal sealed unsafe class AchievementCatalog
 
     // Fate.Location is a layout instance id; the zone that owns it is found by scanning each
     // field zone's planevent layout. Done once, off the game thread.
+    private static Dictionary<uint, uint>? cachedFateZones;
+    private static readonly object fateZonesLock = new();
+
+    // FATE id → zone, computed once per plugin load and shared (achievements, level routes).
+    internal static Dictionary<uint, uint> FateZones()
+    {
+        lock (fateZonesLock) return cachedFateZones ??= FateZonesFromLayouts();
+    }
+
     private static Dictionary<uint, uint> FateZonesFromLayouts()
     {
         var instanceZone = new Dictionary<uint, uint>();
@@ -84,7 +93,7 @@ internal sealed unsafe class AchievementCatalog
 
     private void Build()
     {
-        var fateZones = FateZonesFromLayouts();
+        var fateZones = FateZones();
         var fateIds = new Dictionary<string, List<ushort>>(StringComparer.OrdinalIgnoreCase);
         foreach (var fate in Services.Data.GetExcelSheet<Fate>())
         {

@@ -17,7 +17,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ConcurrentQueue<(string Action, RunOptions? Options)> requests = new();
     private readonly StartConfirmation startConfirmation = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
-    private double lastTick, lastCatalog = -100, lastError = -100;
+    private double lastTick, lastCatalog = -100, lastError = -100, lastHistorySave;
+    private bool wasRunning;
     private bool disposed;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
@@ -26,7 +27,7 @@ public sealed class Plugin : IDalamudPlugin
         config = pluginInterface.GetPluginConfig() as Configuration ?? new();
         Localization.Apply(config.Language);
         runtime = new();
-        runner = new(runtime);
+        runner = new(runtime) { History = config.History };
         window = new(config, runner, runtime, Request);
         Services.Commands.AddHandler("/fatepilot", new CommandInfo(OnCommand)
         {
@@ -111,6 +112,9 @@ public sealed class Plugin : IDalamudPlugin
                 if (f.TerritoryId != 0 && !config.FateZones.ContainsKey(f.Id)) { config.FateZones[f.Id] = f.TerritoryId; learned = true; }
             if (learned) config.Save();
             if (window.AchievementsVisible) window.Achievements.Tick();
+            // Persist the zone history every minute while running, and once when a session ends.
+            if ((runner.IsRunning && now - lastHistorySave > 60) || (wasRunning && !runner.IsRunning)) { lastHistorySave = now; config.Save(); }
+            wasRunning = runner.IsRunning;
             window.Messages = runtime.Messages;
             window.TicketCount = runtime.TicketCount;
         }
