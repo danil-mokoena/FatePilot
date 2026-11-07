@@ -1276,6 +1276,66 @@ Test("A group boss engaging the player is reported as a problem stop", () =>
     Assert(r.State==RunState.Faulted && f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped));
 });
 
+// ---------- 0.9 ----------
+Test("Map projection matches the game's map texture and map-window coordinates", () =>
+{
+    Assert(MapProjection.ToTexture(Vector3.Zero,100,0,0)==new Vector2(1024,1024));
+    Assert(MapProjection.ToTexture(new(512,0,-512),200,0,0)==new Vector2(2048,0));
+    Assert(MapProjection.ToTexture(new(100,0,100),100,-50,25)==new Vector2(1074,1149));
+    var c=MapProjection.ToMapCoordinates(Vector3.Zero,100,0,0);
+    Assert(Math.Abs(c.X-21.48f)<.01f && Math.Abs(c.Y-21.48f)<.01f, $"{c}");
+    var f=MapProjection.Facing(0);
+    Assert(Math.Abs(f.X)<1e-5 && Math.Abs(f.Y-1)<1e-5, "Rotation 0 faces south (down on the map)");
+    Assert(MapProjection.ScaleBar(130)==100 && MapProjection.ScaleBar(5)==10 && MapProjection.ScaleBar(600)==500);
+});
+Test("Profile codes round-trip the settings, leave the job queue out and clean the name", () =>
+{
+    var o=Options(); o.Route=[zone1,zone2]; o.PriorityFates=[1,2];
+    o.UseJobQueue=true; o.JobQueue=[new JobGoal{Gearset=3,Job=22,Name="DRG",TargetLevel=90}];
+    var code=ProfileCode.Encode("  Gem\nfarm‮  ",o);
+    Assert(code.StartsWith(ProfileCode.Prefix) && code.Length<ProfileCode.MaxCodeLength);
+    Assert(ProfileCode.TryDecode(code,out var name,out var back,out var error),error);
+    Assert(name=="Gemfarm" && back.Route.Count==2 && back.Route[1]==zone2 && back.PriorityFates.SequenceEqual(new ushort[]{1,2}),name);
+    Assert(back.JobQueue.Count==0 && !back.UseJobQueue && back.ReturnDestination==home, "Gearsets stay with their character");
+    Assert(o.JobQueue.Count==1, "Encoding never changes the saved profile");
+});
+Test("Profile codes reject foreign text, damaged data, oversized payloads and invalid settings", () =>
+{
+    foreach(var bad in new[]{"","hello","FATEPILOT1:not base64!!",ProfileCode.Prefix+Convert.ToBase64String(new byte[]{1,2,3}),ProfileCode.Prefix+new string('A',ProfileCode.MaxCodeLength)})
+        Assert(!ProfileCode.TryDecode(bad,out _,out _,out var e) && e.Length>0, bad.Length>40?bad[..40]:bad);
+    byte[] Pack(byte[] data)
+    {
+        using var buffer=new MemoryStream();
+        using (var zip=new System.IO.Compression.GZipStream(buffer,System.IO.Compression.CompressionLevel.SmallestSize,true)) zip.Write(data);
+        return buffer.ToArray();
+    }
+    var bomb=ProfileCode.Prefix+Convert.ToBase64String(Pack(new byte[2_000_000]));
+    Assert(bomb.Length<ProfileCode.MaxCodeLength && !ProfileCode.TryDecode(bomb,out _,out _,out _), "A tiny code that inflates past the limit is refused");
+    var o=Options(); o.MaximumProgress=0;
+    Assert(!ProfileCode.TryDecode(ProfileCode.Encode("x",o),out _,out _,out var why) && why.Length>0, "Settings are validated");
+    var json=System.Text.Encoding.UTF8.GetBytes("{\"Name\":\"N\",\"Options\":{\"Route\":null,\"ExcludedFates\":null,\"PriorityFates\":null,\"JobQueue\":null,\"ReturnAfterFates\":0}}");
+    Assert(ProfileCode.TryDecode(ProfileCode.Prefix+Convert.ToBase64String(Pack(json)),out var n2,out var o2,out var e2) && o2.Route.Count==0 && n2=="N", e2);
+});
+Test("Shortcuts need Ctrl or Alt, fire once per press with exact modifiers, and never while typing", () =>
+{
+    var b=new HotkeyBinding{Action="toggle",Key=0x50,Ctrl=true,Alt=true};
+    Assert(Hotkeys.IsValid(b) && Hotkeys.Label(b)=="Ctrl+Alt+P");
+    Assert(!Hotkeys.IsValid(new HotkeyBinding{Action="toggle",Key=0x50,Shift=true}), "Shift alone would fire while chatting");
+    Assert(!Hotkeys.IsValid(new HotkeyBinding{Action="toggle",Key=0x0D,Ctrl=true}) && Hotkeys.Label(new HotkeyBinding{Key=0x71,Alt=true})=="Alt+F2");
+    var down=new HashSet<int>(); var t=new HotkeyTracker(); var list=new List<HotkeyBinding>{b};
+    bool Down(int k)=>down.Contains(k);
+    down.UnionWith(new[]{0x11,0x12,0x50});
+    Assert(t.Update(Down,false,list).SequenceEqual(new[]{"toggle"}));
+    Assert(t.Update(Down,false,list).Count==0, "Holding does not repeat");
+    down.Remove(0x50); t.Update(Down,false,list); down.Add(0x50);
+    Assert(t.Update(Down,false,list).Count==1, "A new press fires again");
+    down.Clear(); t.Update(Down,false,list);
+    down.UnionWith(new[]{0x11,0x50}); Assert(t.Update(Down,false,list).Count==0, "Ctrl+P is not Ctrl+Alt+P");
+    down.Clear(); t.Update(Down,false,list);
+    down.UnionWith(new[]{0x11,0x12,0x50}); Assert(t.Update(Down,true,list).Count==0, "Typing swallows it");
+    Assert(t.Update(Down,false,list).Count==0, "Still held after typing: no late fire");
+});
+
 if (args.Length > 0)
 {
     Test("Every language has all keys and matching format placeholders", () =>
