@@ -1190,12 +1190,90 @@ Test("Restock opening and navigation have finite deadlines", () =>
 {
     var (r,rt,s)=AtGreensShop();
     // Opening an unrelated interaction during city travel is not adopted.
-    var o=GreensOptions(); var w=world with{GreensInventory=new(true,0,999,100000)};
+    var o=GreensOptions(); o.AutoRetry=false; var w=world with{GreensInventory=new(true,0,999,100000)};
     (r,rt)=Started(w,o); r.Tick(w,1); r.Tick(w with{Loading=true},2);
     r.Tick(w with{Territory=129},3); r.Tick(w with{Territory=129,Occupied=true,DialogueOpen=true},4);
     Assert(!r.IsRunning && rt.Purchases.Count==0);
     (r,rt)=Started(w,o); r.Tick(w,1); r.Tick(w with{Loading=true},2);
     r.Tick(w with{Territory=129},3); r.Tick(w with{Territory=129},34); Assert(r.State==RunState.Faulted);
+});
+
+// ---------- 0.8.1 review fixes ----------
+Test("A failed path to the idle hotspot keeps the session waiting instead of stopping it", () =>
+{
+    var history=new ZoneHistory(); for(var i=0;i<3;i++) history.RecordSpot(1000,new(500,0,0));
+    var fake=new Fake(); var r=new Runner(fake){ History=history };
+    var o=Options(); o.ReturnAfterFates=0; var empty=world with{Fates=[]};
+    r.Start(o,empty,0); r.Tick(empty,1);
+    Assert(r.State==RunState.Waiting && fake.Moves==1, "Flies once to the hotspot");
+    r.Tick(empty with{NavError="no path"},2);
+    Assert(r.IsRunning && r.State==RunState.Waiting, r.Status);
+    r.Tick(empty,3); r.Tick(empty,4);
+    Assert(r.IsRunning && fake.Moves==1, "No retry loop towards an unreachable spot");
+});
+Test("The hotspot move gives up mounting after a few seconds and walks", () =>
+{
+    var history=new ZoneHistory(); for(var i=0;i<3;i++) history.RecordSpot(1000,new(500,0,0));
+    var fake=new Fake(); var r=new Runner(fake){ History=history };
+    var o=Options(); o.ReturnAfterFates=0; o.UseMount=true; var empty=world with{Fates=[]};
+    r.Start(o,empty,0); r.Tick(empty,1); r.Tick(empty,5);
+    Assert(fake.Moves==0, "Waits for the mount first");
+    r.Tick(empty,10); r.Tick(empty,11); r.Tick(empty,12);
+    Assert(fake.Moves==1 && r.IsRunning, "Then walks, once");
+});
+Test("A FATE seen preparing and then running is one appearance and one alert", () =>
+{
+    var history=new ZoneHistory(); var fake=new Fake(); var r=new Runner(fake){ History=history };
+    var o=Options(); o.PriorityFates=[1];
+    var preparing=fate with{State=EventState.Preparing,StartedAt=0,CanStart=false};
+    r.Start(o,world with{Fates=[preparing]},0);
+    r.Tick(world with{Fates=[preparing]},1); r.Tick(world,2); r.Tick(world,3);
+    Assert(history.For(1000).Spots.Values.Sum(s=>s.Count)==1, "Counted once");
+    Assert(fake.Notifications.Count(n=>n.Kind==NotifyKind.PriorityFate)==1, "Alerted once");
+});
+Test("A retry during a restock trip forgets the trip; a purchase in flight never retries", () =>
+{
+    var low=world with{GreensInventory=new(true,0,999,100000),Mounted=true};
+    var (r,rt)=Started(low,GreensOptions());
+    r.Tick(low,1); Assert(r.State==RunState.Restocking && rt.Teleports.Count==0, "Dismounting before the vendor trip");
+    r.Tick(low with{Territory=1001},2); Assert(r.State==RunState.Retrying);
+    var stocked=world with{Territory=1001,GreensInventory=new(true,99,999,100000)};
+    r.Tick(stocked,15); r.Tick(stocked,16);
+    Assert(rt.Teleports.SequenceEqual(new[]{zone1}), "Back to the route");
+    r.Tick(stocked with{Loading=true},17); r.Tick(world with{GreensInventory=stocked.GreensInventory},18);
+    Assert(r.State==RunState.Selecting && rt.ShopOpens==0, "Arrival is not mistaken for the vendor trip: "+r.State);
+    var (r2,rt2,s)=AtGreensShop(); r2.Tick(s,7); Assert(rt2.Purchases.Count==1);
+    r2.Tick(s with{Territory=1001},8);
+    Assert(r2.State==RunState.Faulted && rt2.Purchases.Count==1 && rt2.Suspends==0);
+});
+Test("A prompt the player opens on the way to the vendor is waited out", () =>
+{
+    var w=world with{GreensInventory=new(true,0,999,100000)};
+    var (r,rt)=Started(w,GreensOptions());
+    r.Tick(w,1); r.Tick(w with{Loading=true},2); r.Tick(w with{Territory=129},3);
+    r.Tick(w with{Territory=129,DialogueOpen=true},4); r.Tick(w with{Territory=129,DialogueOpen=true},8);
+    Assert(r.IsRunning && r.State==RunState.Restocking && rt.Suspends==0, r.Status);
+    r.Tick(w with{Territory=129},9); Assert(r.IsRunning && r.State==RunState.Restocking);
+});
+Test("A momentary repair refusal retries later; only repeated refusals disable it", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.SelfRepair=true; o.RepairBelowPercent=30;
+    var refused=world with{Fates=[],MinDurability=10,CanSelfRepair=false};
+    var (r,f)=Started(refused,o);
+    r.Tick(refused,1); r.Tick(refused,30);
+    Assert(r.IsRunning && !f.Notifications.Any(n=>n.Kind==NotifyKind.Problem));
+    r.Tick(refused with{CanSelfRepair=true},62);
+    Assert(r.State==RunState.Repairing && f.RepairStarts==1, "Retried a minute later");
+    (r,f)=Started(refused,o);
+    r.Tick(refused,1); r.Tick(refused,62); r.Tick(refused,123);
+    Assert(f.Notifications.Count(n=>n.Kind==NotifyKind.Problem)==1, "Disabled after three refusals");
+    r.Tick(refused with{CanSelfRepair=true},200); Assert(f.RepairStarts==0);
+});
+Test("A group boss engaging the player is reported as a problem stop", () =>
+{
+    var (r,f)=Started();
+    r.Tick(world with{Enemies=[new(9,196,Vector3.Zero,1,true)]},1);
+    Assert(r.State==RunState.Faulted && f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped));
 });
 
 if (args.Length > 0)
