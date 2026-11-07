@@ -570,6 +570,44 @@ Test("A prioritized FATE (from Achievements) is chosen before a nearer one", () 
     o.ExcludedFates=[2];
     Assert(Selection.Choose(world with { Fates=[near,far] }, o, none, 0)?.Id==1, "Ignore list still wins");
 });
+Test("Zone history counts time, completed FATEs, gemstones and spawn spots per zone", () =>
+{
+    var history=new ZoneHistory(); var fake=new Fake(); var r=new Runner(fake){ History=history };
+    r.Start(Options(), world, 0);
+    var inside=Engage(r);
+    r.Tick(inside with { Fates=[fate with { Progress=100 }], Gemstones=16 },7);
+    var z=history.For(1000);
+    Assert(z.Fates==1 && z.Gems==16 && z.Seconds>0 && z.Spots.Values.Sum(s=>s.Count)==1, $"fates={z.Fates} gems={z.Gems} s={z.Seconds}");
+    for(var i=0;i<3;i++) history.RecordSpot(1000,new(105,0,5));
+    Assert(history.Hotspot(1000) is { } spot && Vector3.Distance(spot,new(103.75f,0,3.75f))<1);
+});
+Test("Preferring rewards lets a bonus FATE win over a nearer one, within the chosen distance", () =>
+{
+    var near=fate with { Id=1, Position=new(50,0,0) }; var bonus=fate with { Id=2, Bonus=true, Position=new(200,0,0) };
+    var o=Options(); var none=new Dictionary<FateKey,double>();
+    Assert(Selection.Choose(world with { Fates=[near,bonus] }, o, none, 0)?.Id==1, "Off by default: nearest first");
+    o.PreferRewards=true; o.BonusWorthYalms=200;
+    Assert(Selection.Choose(world with { Fates=[near,bonus] }, o, none, 0)?.Id==2);
+    o.BonusWorthYalms=100;
+    Assert(Selection.Choose(world with { Fates=[near,bonus] }, o, none, 0)?.Id==1, "Too far for what the bonus is worth");
+});
+Test("Zone time budget moves to the next route zone between FATEs", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.MinutesPerZone=10; o.Route=[zone1,zone2];
+    var (r,f)=Started(world,o); r.Tick(world,1); Assert(r.Selected!=null && f.Teleports.Count==0);
+    var idle=world with { Fates=[] };
+    r.Tick(idle,700); r.Tick(idle,701);
+    Assert(f.Teleports.Single()==zone2);
+});
+Test("With nothing eligible, the runner waits at the zone's usual FATE spot", () =>
+{
+    var history=new ZoneHistory(); for(var i=0;i<3;i++) history.RecordSpot(1000,new(500,10,500));
+    var fake=new Fake(); var r=new Runner(fake){ History=history }; var o=Options(); o.ReturnAfterFates=0;
+    var idle=world with { Fates=[] };
+    r.Start(o, idle, 0); r.Tick(idle,1); r.Tick(idle,2);
+    Assert(fake.Moves==1 && Vector3.Distance(fake.LastMove,new(500,10,500))<1);
+    r.Tick(idle,3); Assert(fake.Moves==1, "Only once per wait");
+});
 Test("Session summary is kept after stopping", () =>
 {
     var (r,_)=Started(); var inside=Engage(r);
