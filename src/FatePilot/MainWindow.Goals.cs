@@ -16,17 +16,7 @@ internal sealed partial class MainWindow
         ImGui.SetNextItemWidth(130);
         if (ImGui.InputInt(L.T("Minutos de sessão (0 = sem meta)"), ref minutes))
         { o.ReturnAfterMinutes = Math.Clamp(minutes, 0, 10080); SaveSettings(); }
-        var avoid = o.AvoidGemstoneCap;
-        if (ImGui.Checkbox(L.T("Voltar antes do limite de gemstones"), ref avoid))
-        { o.AvoidGemstoneCap = avoid; SaveSettings(); }
-        if (avoid)
-        {
-            var reserve = o.GemstoneCapReserve;
-            ImGui.SetNextItemWidth(130);
-            if (ImGui.InputInt(L.T("Espaço livre reservado"), ref reserve))
-            { o.GemstoneCapReserve = Math.Clamp(reserve, 0, 1000000); SaveSettings(); }
-            Help(L.T("O FATE atual será concluído. Reserve espaço para a recompensa final; não há garantia contra excesso."));
-        }
+        ImGui.TextDisabled(L.T("Saldo máximo de gemstones e cidade de troca: Inventário → Gemstones."));
         if (ImGui.CollapsingHeader(L.T("Como as metas funcionam") + "###goalHelp"))
         {
             ImGui.TextWrapped(L.T("A primeira meta atingida solicita o retorno após o FATE atual e suas entregas. O saldo inicial não conta como ganho."));

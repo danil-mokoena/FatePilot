@@ -10,7 +10,7 @@ namespace FatePilot;
 
 internal sealed partial class MainWindow(Configuration config, Runner runner, GameRuntime runtime, Action<string> request)
 {
-    public static readonly uint[] CityTerritories = [129, 130, 132, 418, 478, 628, 819, 962, 1185, 1186];
+    public static readonly uint[] CityTerritories = [129, 130, 132, 418, 478, 628, 819, 820, 962, 963, 1185, 1186];
     public List<Destination> Destinations { get; set; } = [];
     private readonly List<ZoneCard> zones = ZoneCatalog.Read();
     private static readonly string Version = typeof(Plugin).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
@@ -133,6 +133,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     private void DrawSession()
     {
+        DrawSummary();
         DrawNextStep();
         if (ImGui.BeginTable("sessionStats", 4, ImGuiTableFlags.SizingStretchSame))
         {
@@ -186,6 +187,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     private void DrawRoute()
     {
         if (runner.IsRunning) ImGui.TextWrapped(L.T("Edite livremente. As mudanças valem após o FATE ou a ação em andamento."));
+        DrawProfiles();
         BeginCard("selectedRoute"); DrawSelectedRoute(); EndCard();
         ImGui.SetNextItemWidth(-1);
         ImGui.InputTextWithHint("###zoneSearch", L.T("Buscar zona ou aetheryte"), ref search, 100);
@@ -230,10 +232,13 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             ImGui.SameLine();
             ImGui.AlignTextToFramePadding();
             ImGui.TextUnformatted(zones.FirstOrDefault(z => z.TerritoryId == d.TerritoryId)?.Name ?? d.Name);
-            var buttons = IconButtonWidth(FontAwesomeIcon.ChevronUp) + IconButtonWidth(FontAwesomeIcon.ChevronDown)
-                + IconButtonWidth(FontAwesomeIcon.TrashAlt) + ImGui.GetStyle().ItemSpacing.X * 2;
+            // Right-align the controls using their real width measured on the previous frame
+            // (estimate only on the very first frame), so they never spill past the card.
+            var buttons = routeButtonsWidth > 0 ? routeButtonsWidth
+                : (IconButtonWidth(FontAwesomeIcon.ChevronUp) + IconButtonWidth(FontAwesomeIcon.ChevronDown) + IconButtonWidth(FontAwesomeIcon.TrashAlt)) * 1.4f;
             ImGui.SameLine();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, CardWidth() - buttons));
+            var buttonsStart = ImGui.GetCursorScreenPos().X;
             ImGui.BeginDisabled(i == 0);
             if (ImGuiComponents.IconButton(FontAwesomeIcon.ChevronUp)) { (config.Options.Route[i], config.Options.Route[i - 1]) = (config.Options.Route[i - 1], d); SaveSettings(); }
             ImGui.EndDisabled();
@@ -242,8 +247,10 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             if (ImGuiComponents.IconButton(FontAwesomeIcon.ChevronDown)) { (config.Options.Route[i], config.Options.Route[i + 1]) = (config.Options.Route[i + 1], d); SaveSettings(); }
             ImGui.EndDisabled();
             ImGui.SameLine();
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.TrashAlt)) { config.Options.Route.RemoveAt(i); SaveSettings(); ImGui.PopID(); break; }
+            var removed = ImGuiComponents.IconButton(FontAwesomeIcon.TrashAlt);
+            routeButtonsWidth = ImGui.GetItemRectMax().X - buttonsStart;
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Remover da rota"));
+            if (removed) { config.Options.Route.RemoveAt(i); SaveSettings(); ImGui.PopID(); break; }
             var hubs = Destinations.Where(x => x.TerritoryId == d.TerritoryId).ToArray();
             if (hubs.Length > 1)
             {
@@ -415,6 +422,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     }
 
     public int TicketCount { get; set; }
+    private float routeButtonsWidth;
     public DateTime? DependenciesCheckedAt { get; set; }
 
     // Green check / red cross per required integration.

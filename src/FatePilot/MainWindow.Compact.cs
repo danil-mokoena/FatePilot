@@ -47,9 +47,10 @@ internal sealed partial class MainWindow
         var full = ImGui.GetContentRegionAvail().X;
         var f = runner.Selected;
 
-        // Header: FATE icon, name, live status, completed counter on the right.
+        // Header: FATE icon, name, live status; FATE and gemstone counters on the right.
         var counter = L.T("{0} FATEs", runner.Completed);
-        var counterWidth = ImGui.CalcTextSize(counter).X + 14 * scale;
+        var gems = "+" + runner.GemstonesEarned.ToString("N0");
+        var counterWidth = IconChipWidth(counter) + ImGui.GetStyle().ItemSpacing.X + IconChipWidth(gems);
         GameIcon(f != null ? FateIcon(f.Id) : AetheryteIcon, 40);
         ImGui.SameLine();
         ImGui.BeginGroup();
@@ -60,7 +61,9 @@ internal sealed partial class MainWindow
         ImGui.EndGroup();
         ImGui.SameLine();
         ImGui.SetCursorPosX(startX + full - counterWidth);
-        Chip(counter, Success);
+        IconChip(f != null ? FateIcon(f.Id) : 0, counter, Success);
+        ImGui.SameLine();
+        IconChip(ItemIcon(26807), gems, Gold);
 
         // Progress of the current FATE.
         ImGui.Spacing();
@@ -71,9 +74,9 @@ internal sealed partial class MainWindow
         ImGui.Spacing();
         if (ImGui.BeginTable("compactStats", 3, ImGuiTableFlags.SizingStretchSame))
         {
-            CompactStat("Gemstones", "+" + runner.GemstonesEarned.ToString("N0"));
-            CompactStat(L.T("Tempo"), TimeSpan.FromSeconds(runner.ElapsedSeconds).ToString(@"h\:mm\:ss"));
-            CompactStat("Gil", (runtime.ReservedGil + runner.GreensGilCommitted).ToString("N0"));
+            CompactStat(ItemIcon(26807), null, "Gemstones", gems);
+            CompactStat(0, FontAwesomeIcon.Stopwatch, L.T("Tempo"), TimeSpan.FromSeconds(runner.ElapsedSeconds).ToString(@"h\:mm\:ss"));
+            CompactStat(ItemIcon(1), null, "Gil", (runtime.ReservedGil + runner.GreensGilCommitted).ToString("N0"));
             ImGui.EndTable();
         }
 
@@ -98,6 +101,10 @@ internal sealed partial class MainWindow
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Stop, L.T("Parar") + "###compactStop")) request("stop");
         ImGui.PopStyleColor(4);
         ImGui.SameLine();
+        if (runner.IsPaused)
+        { if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Play, L.T("Continuar") + "###compactResume")) request("resume"); }
+        else if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Pause, L.T("Pausar") + "###compactPause")) request("pause");
+        ImGui.SameLine();
         ImGui.BeginDisabled(f == null);
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.FastForward, L.T("Pular") + "###compactSkip")) request("skip");
         ImGui.EndDisabled();
@@ -108,11 +115,36 @@ internal sealed partial class MainWindow
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Abrir a janela completa"));
     }
 
-    private static void CompactStat(string label, string value)
+    // Label on top, icon + value below. Game icon when there is one, otherwise a gold glyph.
+    private static void CompactStat(uint gameIcon, FontAwesomeIcon? glyph, string label, string value)
     {
         ImGui.TableNextColumn();
         ImGui.TextDisabled(label);
+        if (gameIcon != 0) GameIcon(gameIcon, 18);
+        else if (glyph is { } g) { ImGui.PushStyleColor(ImGuiCol.Text, Gold); DrawSymbol(g); ImGui.PopStyleColor(); }
+        ImGui.SameLine();
         ImGui.TextUnformatted(value);
+    }
+
+    private static float IconChipWidth(string text) =>
+        ImGui.GetTextLineHeight() + ImGui.CalcTextSize(text).X + 18 * ImGuiHelpers.GlobalScale;
+
+    // Pill with a small game icon followed by text.
+    private static void IconChip(uint icon, string text, Vector4 color)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var line = ImGui.GetTextLineHeight();
+        var size = new Vector2(IconChipWidth(text), line + 4 * scale);
+        var origin = ImGui.GetCursorScreenPos();
+        var draw = ImGui.GetWindowDrawList();
+        draw.AddRectFilled(origin, origin + size, ImGui.ColorConvertFloat4ToU32(color with { W = .16f }), size.Y / 2);
+        draw.AddRect(origin, origin + size, ImGui.ColorConvertFloat4ToU32(color with { W = .55f }), size.Y / 2);
+        var iconPos = origin + new Vector2(6 * scale, 2 * scale);
+        if (icon != 0 && Services.Textures.TryGetFromGameIcon(new Dalamud.Interface.Textures.GameIconLookup(icon), out var shared)
+            && shared != null && shared.TryGetWrap(out var texture, out _))
+            draw.AddImage(texture.Handle, iconPos, iconPos + new Vector2(line));
+        draw.AddText(origin + new Vector2(6 * scale + line + 6 * scale, 2 * scale), ImGui.ColorConvertFloat4ToU32(color), text);
+        ImGui.Dummy(size);
     }
 
     // Tinted one-line notice with a warning icon.

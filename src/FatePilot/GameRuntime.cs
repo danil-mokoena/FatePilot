@@ -40,13 +40,13 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
     {
         var pi = Services.Plugin;
         return [
-            (L.T("módulo de navegação: navegação cancelável"), pi.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>(IntegrationIds.NavigationNavPathfindCancelable).HasFunction
+            ("vnavmesh · " + L.T("módulo de navegação: navegação cancelável"), pi.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>(IntegrationIds.NavigationNavPathfindCancelable).HasFunction
                 && pi.GetIpcSubscriber<List<Vector3>, bool, object>(IntegrationIds.NavigationPathMoveTo).HasAction
                 && pi.GetIpcSubscriber<object>(IntegrationIds.NavigationPathStop).HasAction
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.NavigationNavIsReady).HasFunction
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.NavigationPathIsRunning).HasFunction
                 && pi.GetIpcSubscriber<Vector3,float,float,Vector3?>(IntegrationIds.NavigationQueryMeshNearestPointReachable).HasFunction),
-            (L.T("módulo de posicionamento: presets atuais + configuração"), pi.GetIpcSubscriber<List<string>>(IntegrationIds.PositioningPresetsGetActiveList).HasFunction
+            ("BossMod · " + L.T("módulo de posicionamento: presets atuais + configuração"), pi.GetIpcSubscriber<List<string>>(IntegrationIds.PositioningPresetsGetActiveList).HasFunction
                 && pi.GetIpcSubscriber<List<string>, bool>(IntegrationIds.PositioningPresetsSetActiveList).HasFunction
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningPresetsSetForceDisabled).HasFunction
                 && pi.GetIpcSubscriber<IReadOnlyList<string>, bool, List<string>>(IntegrationIds.PositioningConfiguration).HasFunction
@@ -57,12 +57,12 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
                 && pi.GetIpcSubscriber<object>(IntegrationIds.PositioningObstacleMapGetGenerationStatus).HasFunction
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningObstacleMapHasTempMap).HasFunction
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningObstacleMapClearTempMap).HasFunction),
-            (L.T("módulo de habilidades: controle temporário"), pi.GetIpcSubscriber<string,string,string?,Guid?>(IntegrationIds.AbilitiesRegisterForLeaseWithCallback).HasFunction
+            ("WrathCombo · " + L.T("módulo de habilidades: controle temporário"), pi.GetIpcSubscriber<string,string,string?,Guid?>(IntegrationIds.AbilitiesRegisterForLeaseWithCallback).HasFunction
                 && pi.GetIpcSubscriber<Guid,bool,object>(IntegrationIds.AbilitiesSetAutoRotationState).HasFunction
                 && pi.GetIpcSubscriber<Guid,object>(IntegrationIds.AbilitiesSetCurrentJobAutoRotationReady).HasFunction
                 && pi.GetIpcSubscriber<Guid,object,object,object>(IntegrationIds.AbilitiesSetAutoRotationConfigState).HasFunction
                 && pi.GetIpcSubscriber<Guid,object>(IntegrationIds.AbilitiesReleaseControl).HasAction),
-            (L.T("módulo de viagens: zonas + instâncias"), pi.GetIpcSubscriber<uint,byte,bool>(IntegrationIds.TravelTeleport).HasFunction
+            ("Lifestream · " + L.T("módulo de viagens: zonas + instâncias"), pi.GetIpcSubscriber<uint,byte,bool>(IntegrationIds.TravelTeleport).HasFunction
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.TravelIsBusy).HasFunction
                 && pi.GetIpcSubscriber<object>(IntegrationIds.TravelAbort).HasAction
                 && pi.GetIpcSubscriber<int,object>(IntegrationIds.TravelChangeInstance).HasAction
@@ -89,6 +89,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         combat.Begin();
         travel.Begin(options);
         companionEnabled = options.SummonChocobo;
+        upkeepOptions = options;
     }
 
     private void ValidateOptions(RunOptions options)
@@ -103,7 +104,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             if (!inventory.Ready || inventory.Count <= options.GreensThreshold)
                 _ = GreensRestock.Needed(options, inventory, 0);
         }
-        foreach (var destination in options.Route.Concat(options.ReturnDestination is { } ret ? new[] { ret } : []))
+        foreach (var destination in options.Route.Concat(options.ReturnDestination is { } ret ? new[] { ret } : []).Concat(options.GemstoneDestination is { } gem ? new[] { gem } : []))
             if (!unlocked.Any(d => d.AetheryteId == destination.AetheryteId && d.TerritoryId == destination.TerritoryId))
                 throw new InvalidOperationException(L.T("Aetheryte indisponível para este personagem: ") + destination.Name);
     }
@@ -113,6 +114,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         ValidateOptions(options);
         travel.UpdateOptions(options);
         companionEnabled = options.SummonChocobo;
+        upkeepOptions = options;
     }
 
     public void End()
@@ -146,6 +148,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
 
     public void Update(World world)
     {
+        TickRepair();
         if (session && world.LoggedIn && !world.Dead && !world.Restricted && !world.Loading && !world.Occupied)
             nav.Update();
     }
@@ -222,7 +225,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             Objectives = objectives, OwnEventInteraction = interactionStatus == InteractionStatus.Owned,
             EventInteractionPending = interactionStatus == InteractionStatus.Waiting,
             EventInteractionError = interactionStatus == InteractionStatus.Foreign ? L.T("O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.") :
-                interactionStatus == InteractionStatus.Expired ? L.T("A interação com o NPC não terminou em 15 segundos. Consulte o diagnóstico.") : null,
+                interactionStatus == InteractionStatus.Expired ? L.T("A interação com o NPC não terminou em 60 segundos. Consulte o diagnóstico.") : null,
             Gemstones = EventInteraction.ItemCount(26807),
             GemstoneCap = currency == null ? 0 : (int)currency->GetItemMaxCount(26807),
             CurrentWorld = gameWorld is { } current ? TrackerWorld.FromCurrent(current.RowId, current.Name.ToString(),
@@ -232,6 +235,11 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             CanSummonChocobo = session && companionEnabled && !loading && CanUseGysahlGreens(),
             GreensVendor = loading ? null : GreensShop.Vendor(),
             GreensShop = greensShop.Read(occupied), GreensShopError = greensShop.Error,
+            FreeBagSlots = loading ? -1 : FreeBagSlots(), MinDurability = loading ? -1 : MinDurability(),
+            FoodSecondsLeft = loading ? null : ReadFoodSeconds(),
+            FoodCount = loading ? 0 : FoodCount(upkeepOptions.FoodItemId, upkeepOptions.FoodHq),
+            CanUseFood = !loading && upkeepOptions.FoodItemId != 0 && CanUseItem(upkeepOptions.FoodHq ? upkeepOptions.FoodItemId + 1_000_000 : upkeepOptions.FoodItemId),
+            CanSelfRepair = !loading && CanSelfRepair(), RepairBusy = RepairBusy,
         };
     }
 

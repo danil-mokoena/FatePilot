@@ -30,7 +30,7 @@ public sealed class Plugin : IDalamudPlugin
         window = new(config, runner, runtime, Request);
         Services.Commands.AddHandler("/fatepilot", new CommandInfo(OnCommand)
         {
-            HelpMessage = "/fatepilot | start | stop | status | recover",
+            HelpMessage = "/fatepilot | start | stop | pause | resume | status | recover",
         });
         Services.Framework.Update += Update;
         Services.Plugin.UiBuilder.Draw += window.Draw;
@@ -42,8 +42,8 @@ public sealed class Plugin : IDalamudPlugin
     {
         var action = args.Trim().ToLowerInvariant();
         if (action.Length == 0) window.Open();
-        else if (action is "start" or "stop" or "status" or "recover") Request(action);
-        else Services.Chat.Print("/fatepilot | start | stop | status | recover");
+        else if (action is "start" or "stop" or "status" or "recover" or "pause" or "resume") Request(action);
+        else Services.Chat.Print("/fatepilot | start | stop | pause | resume | status | recover");
     }
 
     private void Request(string action) => requests.Enqueue((action, action is "confirm-start" or "settings"
@@ -64,6 +64,9 @@ public sealed class Plugin : IDalamudPlugin
                 lastCatalog = now;
                 window.Destinations = runtime.Destinations();
                 window.Dependencies = runtime.Dependencies();
+                window.Gearsets = GameRuntime.Gearsets();
+                window.Foods = GameRuntime.FoodChoices();
+                window.DarkMatter = GameRuntime.DarkMatterCount();
                 if (config.Options.ReturnDestination == null && window.Destinations.Count > 0)
                 {
                     config.Options.ReturnDestination = window.Destinations.FirstOrDefault(d => d.AetheryteId == 8)
@@ -90,6 +93,9 @@ public sealed class Plugin : IDalamudPlugin
                     case "status": Services.Chat.Print("FatePilot: " + runner.Status); break;
                     case "recover": if (!runner.IsRunning) runtime.Recover(); break;
                     case "skip": runner.Skip(now); break;
+                    case "pause": runner.RequestPause(); break;
+                    case "pause-after": runner.TogglePauseAfterFate(); break;
+                    case "resume": runner.Resume(world, now); break;
                     case "check-deps": window.Dependencies = runtime.Dependencies(); window.DependenciesCheckedAt = DateTime.Now; break;
                 }
             }

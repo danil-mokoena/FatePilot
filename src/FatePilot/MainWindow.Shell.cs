@@ -9,7 +9,7 @@ namespace FatePilot;
 
 internal sealed partial class MainWindow
 {
-    private enum Page { Session, Route, Fates, Supplies, Tracker, Diagnostics, About, Settings }
+    private enum Page { Session, Route, Fates, Jobs, Inventory, Supplies, Tracker, Diagnostics, About, Settings }
     private Page page;
     private bool startPrompt, openStartPopup;
     private static readonly Stack<(Vector2 Origin, float Width)> cards = new();
@@ -24,28 +24,45 @@ internal sealed partial class MainWindow
         CenterNext(58 * scale); DrawLogo(58 * scale);
         CenteredText("F A T E P I L O T", 170 * scale);
         CenteredText("By Mokoena", 170 * scale);
-        ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
+        ImGui.Spacing(); ImGui.Separator();
+        NavSection(L.T("SESSÃO"));
         NavItem(Page.Session, FontAwesomeIcon.Compass, L.T("Sessão"));
         NavItem(Page.Route, FontAwesomeIcon.Route, L.T("Rota"));
         NavItem(Page.Fates, FontAwesomeIcon.Flag, L.T("FATEs"));
+        NavSection(L.T("PERSONAGEM"));
+        NavItem(Page.Jobs, FontAwesomeIcon.UserShield, L.T("Classes"));
+        NavItem(Page.Inventory, FontAwesomeIcon.BoxOpen, L.T("Inventário"));
         NavItem(Page.Supplies, FontAwesomeIcon.ShoppingBasket, L.T("Suprimentos"));
+        NavSection(L.T("FERRAMENTAS"));
         NavItem(Page.Tracker, FontAwesomeIcon.Globe, "Faloop");
-        ImGui.Spacing(); ImGui.Separator(); ImGui.Spacing();
         NavItem(Page.Diagnostics, FontAwesomeIcon.Stethoscope, L.T("Diagnóstico"));
-        NavItem(Page.About, FontAwesomeIcon.Heart, L.T("Sobre"));
-        NavItem(Page.Settings, FontAwesomeIcon.Cog, L.T("Configurações"));
-        ImGui.Spacing(); ImGui.TextDisabled(Version);
-        // Compact status at the foot of the sidebar, visible on every page.
-        var footer = ImGui.GetTextLineHeightWithSpacing() * 2 + ImGui.GetStyle().ItemSpacing.Y;
+        // About / Settings / status pinned to the foot of the sidebar.
+        var navRow = 32 * scale + ImGui.GetStyle().ItemSpacing.Y;
+        var footer = navRow * 2 + ImGui.GetTextLineHeightWithSpacing() * 2 + ImGui.GetStyle().ItemSpacing.Y * 3;
         if (ImGui.GetContentRegionAvail().Y > footer)
             ImGui.SetCursorPosY(ImGui.GetCursorPosY() + ImGui.GetContentRegionAvail().Y - footer);
+        NavItem(Page.About, FontAwesomeIcon.Heart, L.T("Sobre"));
+        NavItem(Page.Settings, FontAwesomeIcon.Cog, L.T("Configurações"));
         ImGui.Separator();
-        StatusDot(Error != null ? Danger : runner.IsRunning ? Success : Muted, runner.IsRunning && Error == null);
+        ImGui.TextDisabled(Version);
+        StatusDot(Error != null ? Danger : runner.IsPaused ? Gold : runner.IsRunning ? Success : Muted, runner.IsRunning && !runner.IsPaused && Error == null);
         ImGui.SameLine();
-        ImGui.TextDisabled(runner.IsRunning ? $"{runner.Completed} FATEs · {runner.GemstonesEarned:N0}" : L.T("Sessão parada"));
+        if (runner.IsRunning)
+        {
+            ImGui.TextDisabled(L.T("{0} FATEs", runner.Completed));
+            ImGui.SameLine();
+            GameIcon(ItemIcon(26807), 16);
+            ImGui.SameLine();
+            ImGui.TextDisabled(runner.GemstonesEarned.ToString("N0"));
+        }
+        else ImGui.TextDisabled(L.T("Sessão parada"));
         ImGui.EndChild();
         ImGui.SameLine();
-        ImGui.BeginChild("workspace", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        // Breathing room on both sides of the content area, so loose text, headers,
+        // search fields and options line up with the cards instead of touching the edges.
+        var margin = CardPadding * scale;
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + margin);
+        ImGui.BeginChild("workspace", new Vector2(-margin, 0), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         DrawStatusHeader();
         ImGui.Spacing();
         ImGui.BeginChild("page", Vector2.Zero, false);
@@ -55,6 +72,8 @@ internal sealed partial class MainWindow
             case Page.Session: PageTitle(L.T("Sessão"), L.T("Metas e acompanhamento da sua jornada.")); DrawSession(); break;
             case Page.Route: PageTitle(L.T("Rota"), L.T("Escolha os destinos na ordem em que deseja visitá-los.")); DrawRoute(); break;
             case Page.Fates: PageTitle(L.T("FATEs"), L.T("Eventos da zona, progresso e prioridades.")); DrawFates(); break;
+            case Page.Inventory: PageTitle(L.T("Inventário"), L.T("Reparo, comida e limites da bolsa.")); DrawInventory(); break;
+            case Page.Jobs: PageTitle(L.T("Classes"), L.T("Fila de classes por nível, com troca automática de gearset.")); DrawJobs(); break;
             case Page.Supplies: PageTitle(L.T("Suprimentos"), L.T("Estoque, reposição e gastos de viagem.")); DrawCosts(); break;
             case Page.Tracker: PageTitle("Faloop", L.T("Consulte os relatos do mundo atual.")); DrawTracker(); break;
             case Page.Diagnostics: PageTitle(L.T("Diagnóstico"), L.T("Integrações e registro local da sessão.")); DrawDiagnostics(); break;
@@ -65,6 +84,16 @@ internal sealed partial class MainWindow
         ImGui.EndChild();
         ImGui.EndChild();
         DrawStartNotice();
+    }
+
+    // Small muted section label above a group of menu items.
+    private static void NavSection(string label)
+    {
+        ImGui.Dummy(new Vector2(0, 6 * ImGuiHelpers.GlobalScale));
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 11 * ImGuiHelpers.GlobalScale);
+        ImGui.PushStyleColor(ImGuiCol.Text, Muted with { W = .7f });
+        ImGui.TextUnformatted(label);
+        ImGui.PopStyleColor();
     }
 
     private void NavItem(Page target, FontAwesomeIcon icon, string label)
@@ -196,14 +225,15 @@ internal sealed partial class MainWindow
         if (ImGui.BeginTable("statusControls", 2, ImGuiTableFlags.SizingStretchProp, new Vector2(CardWidth(), 0)))
         {
             ImGui.TableSetupColumn("state", ImGuiTableColumnFlags.WidthStretch);
+            var spacing = ImGui.GetStyle().ItemSpacing.X;
             var controlsWidth = ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Play, L.T("Iniciar"))
-                + ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Stop, L.T("Parar")) + ImGui.GetStyle().ItemSpacing.X
-                + (runner.IsRunning ? IconButtonWidth(FontAwesomeIcon.CompressAlt) + ImGui.GetStyle().ItemSpacing.X : 0);
+                + ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Stop, L.T("Parar")) + spacing
+                + (runner.IsRunning ? (IconButtonWidth(FontAwesomeIcon.Pause) + IconButtonWidth(FontAwesomeIcon.FlagCheckered) + IconButtonWidth(FontAwesomeIcon.CompressAlt)) * 1.2f + spacing * 3 : 0);
             ImGui.TableSetupColumn("controls", ImGuiTableColumnFlags.WidthFixed, controlsWidth);
             ImGui.TableNextColumn();
-            StatusDot(Error != null ? Danger : runner.IsRunning ? Success : Muted, runner.IsRunning && Error == null);
+            StatusDot(Error != null ? Danger : runner.IsPaused ? Gold : runner.IsRunning ? Success : Muted, runner.IsRunning && !runner.IsPaused && Error == null);
             ImGui.SameLine();
-            ImGui.TextColored(runner.IsRunning ? Gold : Muted, L.T(runner.IsRunning ? "Sessão em andamento" : "Sessão parada"));
+            ImGui.TextColored(runner.IsRunning ? Gold : Muted, L.T(runner.IsPaused ? "Sessão pausada" : runner.IsRunning ? "Sessão em andamento" : "Sessão parada"));
             if (runner.IsRunning || runner.ElapsedSeconds > 0)
             {
                 ImGui.SameLine();
@@ -220,6 +250,27 @@ internal sealed partial class MainWindow
             ImGui.EndDisabled();
             if (runner.IsRunning)
             {
+                ImGui.SameLine();
+                if (runner.IsPaused)
+                {
+                    PushPrimaryButton();
+                    if (ImGuiComponents.IconButton(FontAwesomeIcon.Play)) request("resume");
+                    ImGui.PopStyleColor(4);
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Continuar a sessão"));
+                }
+                else
+                {
+                    if (ImGuiComponents.IconButton(FontAwesomeIcon.Pause)) request("pause");
+                    if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Pausar agora e devolver o controle do personagem"));
+                }
+                ImGui.SameLine();
+                ImGui.BeginDisabled(runner.IsPaused);
+                if (runner.PauseAfterFate) ImGui.PushStyleColor(ImGuiCol.Button, Gold with { W = .45f });
+                if (ImGuiComponents.IconButton(FontAwesomeIcon.FlagCheckered)) request("pause-after");
+                if (runner.PauseAfterFate) ImGui.PopStyleColor();
+                ImGui.EndDisabled();
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                    ImGui.SetTooltip(L.T(runner.PauseAfterFate ? "Pausa agendada para depois deste FATE (clique para cancelar)" : "Pausar depois deste FATE"));
                 ImGui.SameLine();
                 if (ImGuiComponents.IconButton(FontAwesomeIcon.CompressAlt)) Minimize();
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Minimizar para o painel compacto"));
