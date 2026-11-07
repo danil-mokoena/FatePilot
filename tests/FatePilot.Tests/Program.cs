@@ -411,6 +411,42 @@ Test("Idle zone cycle uses next configured zone", () =>
     var (r,f)=Started(idle,o); r.Tick(idle,1); r.Tick(idle,12);
     Assert(r.State==RunState.Teleporting && f.Teleports.Single()==zone2);
 });
+Test("Zone without aetheryte is reached through Idyllshire and its aethernet gate", () =>
+{
+    var hinterlands=new Destination(399,75,"The Dravanian Hinterlands — via Idyllshire");
+    var o=Options(); o.RotateInstances=false; o.Route=[zone1,hinterlands]; var idle=world with { Fates=[] };
+    var (r,f)=Started(idle,o); r.Tick(idle,1); r.Tick(idle,12);
+    Assert(r.State==RunState.Teleporting && f.Teleports.Single()==hinterlands);
+    r.Tick(idle with { Loading=true },13);
+    r.Tick(idle with { Territory=478 },15);
+    Assert(r.State==RunState.Gateway, "Landing in Idyllshire continues through the aethernet");
+    for(var t=16;t<=30 && f.Shards.Count==0;t++) r.Tick(idle with { Territory=478 },t);
+    Assert(f.Shards.Single()==91);
+    r.Tick(idle with { Territory=478, TravelBusy=true },31);
+    r.Tick(idle with { Territory=399, Loading=true },32);
+    r.Tick(idle with { Territory=399, TravelBusy=true },33);
+    Assert(r.State==RunState.Gateway, "Waits for the travel module to finish");
+    r.Tick(idle with { Territory=399 },34);
+    Assert(r.State==RunState.Selecting && r.IsRunning);
+    r.Tick(idle with { Territory=399 },35);
+    Assert(r.IsRunning, "The zone after the gateway is the expected territory");
+});
+Test("Gateway that never leaves the city stops with a clear reason", () =>
+{
+    var hinterlands=new Destination(399,75,"Hinterlands");
+    var o=Options(); o.RotateInstances=false; o.Route=[zone1,hinterlands]; var idle=world with { Fates=[] };
+    var (r,f)=Started(idle,o); r.Tick(idle,1); r.Tick(idle,12);
+    r.Tick(idle with { Loading=true },13); r.Tick(idle with { Territory=478 },15);
+    for(var t=16;t<=80;t+=4) r.Tick(idle with { Territory=478 },t);
+    Assert(!r.IsRunning && f.Shards.Count is >= 1 and <= 3);
+});
+Test("Skip ignores the current FATE and selects again", () =>
+{
+    var (r,f)=Started(); r.Tick(world,1); Assert(r.Selected?.Id==1);
+    r.Skip(2);
+    Assert(r.Selected==null && r.State==RunState.Selecting && r.IsRunning);
+    r.Tick(world,3); Assert(r.Selected==null, "Skipped FATE is excluded for a while");
+});
 Test("Instance change approaches hub and waits for observed result", () =>
 {
     var o=Options(); o.Route=[zone1,zone2]; var idle=world with { Fates=[] };
@@ -1015,6 +1051,8 @@ sealed class Fake : IRuntime
     public void Teleport(Destination d)=>Teleports.Add(d);
     public void ConfirmTeleport()=>Confirmations++;
     public void ChangeInstance(int instance)=>Instances.Add(instance);
+    public readonly List<uint> Shards=[];
+    public void AethernetTeleport(uint shardId)=>Shards.Add(shardId);
     public void Log(string message) { }
     public void Interact(ObjectiveActor actor) => Interactions.Add(actor);
     public void AdvanceEventInteraction() => Advances++;
