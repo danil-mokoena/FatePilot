@@ -47,11 +47,44 @@ internal sealed unsafe class AchievementCatalog
         text.Contains("FATE", StringComparison.Ordinal) || text.Contains("F.A.T.E", StringComparison.Ordinal)
         || text.Contains("ALÉA", StringComparison.Ordinal) || text.Contains("ALEA", StringComparison.Ordinal);
 
+    private Task? building;
+    public bool Building => building is { IsCompleted: false };
+
+    // Fate.Location is a layout instance id; the zone that owns it is found by scanning each
+    // field zone's planevent layout. Done once, off the game thread.
+    private static Dictionary<uint, uint> FateZonesFromLayouts()
+    {
+        var instanceZone = new Dictionary<uint, uint>();
+        foreach (var t in Services.Data.GetExcelSheet<TerritoryType>())
+        {
+            if (t.TerritoryIntendedUse.RowId != 1 || t.PlaceName.RowId == 0) continue;
+            var bg = t.Bg.ExtractText();
+            var cut = bg.IndexOf("/level/", StringComparison.Ordinal);
+            if (cut < 0) continue;
+            Lumina.Data.Files.LgbFile? lgb = null;
+            try { lgb = Services.Data.GetFile<Lumina.Data.Files.LgbFile>($"bg/{bg[..cut]}/level/planevent.lgb"); } catch { }
+            if (lgb == null) continue;
+            foreach (var layer in lgb.Layers)
+                foreach (var obj in layer.InstanceObjects)
+                    instanceZone.TryAdd(obj.InstanceId, t.RowId);
+        }
+        var result = new Dictionary<uint, uint>();
+        foreach (var fate in Services.Data.GetExcelSheet<Fate>())
+            if (fate.Location != 0 && instanceZone.TryGetValue(fate.Location, out var zone)) result[fate.RowId] = zone;
+        return result;
+    }
+
     public void EnsureBuilt()
     {
         var language = Services.Data.Language.ToString();
-        if (builtFor == language && rows.Count > 0) return;
+        if (builtFor == language && (rows.Count > 0 || Building)) return;
         builtFor = language;
+        building = Task.Run(Build);
+    }
+
+    private void Build()
+    {
+        var fateZones = FateZonesFromLayouts();
         var fateIds = new Dictionary<string, List<ushort>>(StringComparer.OrdinalIgnoreCase);
         foreach (var fate in Services.Data.GetExcelSheet<Fate>())
         {
@@ -71,6 +104,7 @@ internal sealed unsafe class AchievementCatalog
             var named = Quoted.Matches(description).Select(m => m.Groups[1].Value.Trim().TrimEnd(',', '.', '、', '。'))
                 .SelectMany(n => fateIds.TryGetValue(n, out var ids) ? ids : []).Distinct().ToArray();
             var zone = zones.FirstOrDefault(z => description.Contains(z.Name, StringComparison.OrdinalIgnoreCase))?.TerritoryId ?? 0;
+            if (zone == 0) zone = named.Select(id => fateZones.GetValueOrDefault(id)).FirstOrDefault(z => z != 0);
             var group = named.Length > 0 ? AchievementGroup.Fate : zone != 0 ? AchievementGroup.Zone : AchievementGroup.Count;
             built.Add(new FateAchievement(a.RowId, name, description, a.Icon, group, named, zone));
         }
@@ -82,6 +116,7 @@ internal sealed unsafe class AchievementCatalog
     public void Tick()
     {
         EnsureBuilt();
+        if (Building) return;
         var native = NativeAchievement.Instance();
         Loaded = native != null && native->IsLoaded();
         if (!Loaded) return;

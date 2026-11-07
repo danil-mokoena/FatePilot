@@ -34,6 +34,13 @@ internal sealed partial class MainWindow
     private void DrawAchievements()
     {
         Achievements.EnsureBuilt();
+        if (Achievements.Building)
+        {
+            BeginCard("achievementsLoading");
+            EmptyState(FontAwesomeIcon.Hourglass, L.T("Lendo as conquistas e as zonas dos FATEs nos dados do jogo…"));
+            EndCard();
+            return;
+        }
         var all = Achievements.Rows;
         var done = all.Count(a => a.Complete);
         ImGui.TextDisabled(L.T("{0} de {1} concluídas", done, all.Count));
@@ -104,6 +111,11 @@ internal sealed partial class MainWindow
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X);
             ImGui.TextDisabled(a.Description);
             ImGui.PopTextWrapPos();
+            if (a.Territory != 0 && zones.FirstOrDefault(z => z.TerritoryId == a.Territory) is { } zoneCard)
+            {
+                GameIcon(AetheryteIcon, 14); ImGui.SameLine();
+                ImGui.TextColored(Gold with { W = .85f }, zoneCard.Name);
+            }
             ImGui.EndGroup();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(a.Description);
 
@@ -156,7 +168,7 @@ internal sealed partial class MainWindow
         ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             ImGui.SetTooltip(destination != null ? L.T("Montar a rota só com {0}", zones.FirstOrDefault(z => z.TerritoryId == territory)?.Name ?? destination.Name)
-                : territory == 0 ? L.T("Zona ainda desconhecida: ela é aprendida quando o FATE aparecer em uma sessão.")
+                : territory == 0 ? L.T("Zona não encontrada nos dados do jogo para este FATE.")
                 : L.T("Sem aetheryte desbloqueado nesta zona."));
     }
 }
