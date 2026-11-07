@@ -199,7 +199,8 @@ Test("NPC selector can be owned before scene fields exist but ownership expires"
 {
     var lease=new InteractionLease();lease.Begin(502,[0x801A0001],0);
     Assert(lease.Observe(.25,true,default,default,true)==InteractionStatus.Owned);
-    Assert(lease.Observe(15,true,default,default,true)==InteractionStatus.Expired && !lease.Active);
+    Assert(lease.Observe(15,true,default,default,true)==InteractionStatus.Owned);
+    Assert(lease.Observe(InteractionLease.MaxSeconds,true,default,default,true)==InteractionStatus.Expired && !lease.Active);
 });
 Test("An interaction that opens nothing releases its retry window", () =>
 {
@@ -274,7 +275,25 @@ Test("Local conversation never overrides another actor, speaker or populated eve
     Assert(lease.Observe(3,true,new(999,0x00040001),default,false,0,true)==InteractionStatus.Foreign);
     lease.Begin(502,[0x801A0001],0);
     Assert(lease.Observe(1,true,new(0xE0000000,0),default,false,0xE0000000,true)==InteractionStatus.Owned);
-    Assert(lease.Observe(15,true,default,default,false,0,true)==InteractionStatus.Expired);
+    Assert(lease.Observe(InteractionLease.MaxSeconds,true,default,default,false,0,true)==InteractionStatus.Expired);
+});
+Test("Long verified conversation keeps ownership across narration and other speakers", () =>
+{
+    var guard=new LocalDialogueGuard(); var lease=new InteractionLease(); lease.Begin(502,[0x801A0001],0);
+    Assert(guard.Observe(true,true,true,true,false,700,1));
+    // 12 pages at ~1.2 s each: speaker header empty/different, same native callback.
+    for(var i=1;i<=12;i++)
+    {
+        var t=1+i*1.2;
+        var ok=guard.Observe(true,true,true,false,false,700,t);
+        Assert(ok && lease.Observe(t,true,default,default,false,0,ok)==InteractionStatus.Owned);
+    }
+    Assert(guard.Observe(true,true,false,false,true,700,17));
+    // A different callback, or a gap, is never adopted.
+    Assert(!guard.Observe(true,true,true,false,false,701,17.5));
+    var fresh=new LocalDialogueGuard();
+    Assert(fresh.Observe(true,true,true,true,false,700,1));
+    Assert(!fresh.Observe(true,true,true,false,false,700,7));
 });
 Test("Conversation page transitions wait briefly without losing ownership", () =>
 {
@@ -430,6 +449,14 @@ Test("Budget accounts for the next trip including return", () =>
     Throws(() => TravelPolicy.Choose(o,401,0,10000,600));
 });
 Test("Not enough gil refuses the request", () => Throws(() => TravelPolicy.Choose(new(),500,0,499,0)));
+Test("Crafter or gatherer jobs are refused before any module is touched", () =>
+{
+    foreach(var job in new uint[]{8,15,16,18})
+    {
+        var r=new Runner(new Fake()); r.Start(Options(), world with { Job=job }, 0);
+        Assert(!r.IsRunning, r.Status);
+    }
+});
 Test("Job change stops and releases ownership", () => { var (r,f)=Started(); r.Tick(world with { Job=23 },1); Assert(r.State==RunState.Faulted && f.Ends==1); });
 Test("Unexpected loading stops before movement", () => { var (r,f)=Started(); r.Tick(world with { Loading=true },1); Assert(r.State==RunState.Faulted && f.Moves==0); });
 Test("An unexpected dialog stops the session", () => { var (r,f)=Started(); r.Tick(world with { Occupied=true },1); Assert(!r.IsRunning && f.Ends==1); });
