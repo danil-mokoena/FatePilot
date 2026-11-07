@@ -79,7 +79,7 @@ internal sealed partial class MainWindow
             ImGui.SameLine();
             ImGui.PushStyleColor(ImGuiCol.Text, Gold); DrawSymbol(GroupIcon(group)); ImGui.PopStyleColor();
             ImGui.SameLine(); ImGui.TextColored(Gold, GroupLabel(group));
-            ImGui.SameLine(); ImGui.TextDisabled(missing > 0 ? L.T("{0} faltando", missing) : L.T("tudo concluído"));
+            ImGui.SameLine(); ImGui.TextDisabled(missing > 0 ? L.T("{0} faltando", missing) : L.T("Tudo concluído"));
             ImGui.SetCursorPos(headerStart + new Vector2(0, ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y));
             if (!collapsed)
             {
@@ -104,6 +104,7 @@ internal sealed partial class MainWindow
             ImGui.PushID((int)a.Id);
             ImGui.TableNextRow(ImGuiTableRowFlags.None, 46 * scale);
             ImGui.TableNextColumn();
+            var rowTop = ImGui.GetCursorPosY();
             GameIcon(a.Icon, 36);
             ImGui.SameLine();
             ImGui.BeginGroup();
@@ -118,20 +119,27 @@ internal sealed partial class MainWindow
             }
             ImGui.EndGroup();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(a.Description);
+            // The row is as tall as the name + wrapped description (+ zone); the other
+            // columns are centred vertically against that height instead of hugging the top.
+            var rowHeight = Math.Max(ImGui.GetItemRectSize().Y, 36 * scale);
+            void CenterIn(float contentHeight) => ImGui.SetCursorPosY(rowTop + Math.Max(0, (rowHeight - contentHeight) / 2));
 
             ImGui.TableNextColumn();
-            if (a.Complete) Chip(L.T("Concluída"), Success);
+            var line = ImGui.GetTextLineHeight();
+            if (a.Complete) { CenterIn(line + 4 * scale); Chip(L.T("Concluída"), Success); }
             else if (a.Max > 0)
             {
+                CenterIn(line + ImGui.GetStyle().ItemSpacing.Y + 6 * scale);
                 ImGui.TextUnformatted(L.T("{0} de {1}", a.Current.ToString("N0"), a.Max.ToString("N0")));
                 ImGui.PushStyleColor(ImGuiCol.PlotHistogram, Gold);
                 ImGui.PushStyleColor(ImGuiCol.FrameBg, new Vector4(.16f, .18f, .22f, 1));
                 ImGui.ProgressBar(Math.Clamp((float)a.Current / a.Max, 0, 1), new Vector2(-1, 6 * scale), "");
                 ImGui.PopStyleColor(2);
             }
-            else ImGui.TextDisabled(a.Group == AchievementGroup.Fate ? L.T("Pendente") : "—");
+            else { CenterIn(line); ImGui.TextDisabled(a.Group == AchievementGroup.Fate ? L.T("Pendente") : "—"); }
 
             ImGui.TableNextColumn();
+            CenterIn(ImGui.GetFrameHeight());
             DrawAchievementActions(a);
             ImGui.PopID();
         }
