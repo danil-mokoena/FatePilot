@@ -5,7 +5,7 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.6.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.6.2 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
 
 ### New in 0.6
 
