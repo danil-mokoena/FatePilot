@@ -35,6 +35,14 @@ internal sealed partial class MainWindow
         NavItem(Page.About, FontAwesomeIcon.Heart, L.T("Sobre"));
         NavItem(Page.Settings, FontAwesomeIcon.Cog, L.T("Configurações"));
         ImGui.Spacing(); ImGui.TextDisabled(Version);
+        // Compact status at the foot of the sidebar, visible on every page.
+        var footer = ImGui.GetTextLineHeightWithSpacing() * 2 + ImGui.GetStyle().ItemSpacing.Y;
+        if (ImGui.GetContentRegionAvail().Y > footer)
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + ImGui.GetContentRegionAvail().Y - footer);
+        ImGui.Separator();
+        StatusDot(Error != null ? Danger : runner.IsRunning ? Success : Muted, runner.IsRunning && Error == null);
+        ImGui.SameLine();
+        ImGui.TextDisabled(runner.IsRunning ? $"{runner.Completed} FATEs · {runner.GemstonesEarned:N0}" : L.T("Sessão parada"));
         ImGui.EndChild();
         ImGui.SameLine();
         ImGui.BeginChild("workspace", Vector2.Zero, false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
@@ -83,6 +91,69 @@ internal sealed partial class MainWindow
         ImGui.PopFont();
     }
 
+    private static readonly Vector4 Success = new(.36f, .82f, .58f, 1);
+    private static readonly Vector4 Danger = new(.95f, .45f, .38f, 1);
+    private static readonly Vector4 Muted = new(.65f, .70f, .77f, 1);
+
+    // Small round status light; a running session breathes softly.
+    private static void StatusDot(Vector4 color, bool pulse)
+    {
+        var h = ImGui.GetTextLineHeight();
+        var center = ImGui.GetCursorScreenPos() + new Vector2(h / 2, h / 2);
+        var draw = ImGui.GetWindowDrawList();
+        if (pulse)
+        {
+            var t = (float)(Math.Sin(ImGui.GetTime() * 3) * .5 + .5);
+            draw.AddCircleFilled(center, h * (.30f + .14f * t), ImGui.ColorConvertFloat4ToU32(color with { W = .25f * (1 - t) }));
+        }
+        draw.AddCircleFilled(center, h * .24f, ImGui.ColorConvertFloat4ToU32(color));
+        ImGui.Dummy(new Vector2(h, h));
+    }
+
+    // Pill-shaped label for short states ("High level", "Group boss").
+    private static void Chip(string text, Vector4 color)
+    {
+        var scale = ImGuiHelpers.GlobalScale;
+        var padding = new Vector2(7, 2) * scale;
+        var size = ImGui.CalcTextSize(text) + padding * 2;
+        var origin = ImGui.GetCursorScreenPos();
+        var draw = ImGui.GetWindowDrawList();
+        draw.AddRectFilled(origin, origin + size, ImGui.ColorConvertFloat4ToU32(color with { W = .16f }), size.Y / 2);
+        draw.AddRect(origin, origin + size, ImGui.ColorConvertFloat4ToU32(color with { W = .55f }), size.Y / 2);
+        draw.AddText(origin + padding, ImGui.ColorConvertFloat4ToU32(color), text);
+        ImGui.Dummy(size);
+    }
+
+    // The one call-to-action per screen: gold fill, dark text. Caller pops 4 colors.
+    private static void PushPrimaryButton()
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.62f, .49f, .28f, 1));
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(.74f, .59f, .35f, 1));
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(.84f, .68f, .42f, 1));
+        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(.08f, .07f, .06f, 1));
+    }
+
+    // Gold icon + title at the top of a card, with a little breathing room below.
+    private static void CardTitle(FontAwesomeIcon icon, string title)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, Gold);
+        DrawSymbol(icon); ImGui.SameLine(); ImGui.TextUnformatted(title);
+        ImGui.PopStyleColor();
+        ImGui.Dummy(new Vector2(0, 2 * ImGuiHelpers.GlobalScale));
+    }
+
+    // Centered, muted message for lists with nothing to show.
+    private static void EmptyState(FontAwesomeIcon icon, string text)
+    {
+        ImGui.Spacing();
+        ImGui.PushStyleColor(ImGuiCol.Text, Muted with { W = .8f });
+        var width = ImGui.CalcTextSize(text).X + ImGui.GetTextLineHeight() + ImGui.GetStyle().ItemSpacing.X;
+        CenterNext(Math.Min(width, ImGui.GetContentRegionAvail().X));
+        DrawSymbol(icon); ImGui.SameLine(); ImGui.TextUnformatted(text);
+        ImGui.PopStyleColor();
+        ImGui.Spacing();
+    }
+
     private static void PageTitle(string title, string subtitle)
     {
         ImGui.TextColored(Gold, title);
@@ -119,17 +190,26 @@ internal sealed partial class MainWindow
                 + ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Stop, L.T("Parar")) + ImGui.GetStyle().ItemSpacing.X;
             ImGui.TableSetupColumn("controls", ImGuiTableColumnFlags.WidthFixed, controlsWidth);
             ImGui.TableNextColumn();
-            ImGui.TextColored(runner.IsRunning ? Gold : new Vector4(.65f, .7f, .77f, 1), L.T(runner.IsRunning ? "Sessão em andamento" : "Sessão parada"));
+            StatusDot(Error != null ? Danger : runner.IsRunning ? Success : Muted, runner.IsRunning && Error == null);
+            ImGui.SameLine();
+            ImGui.TextColored(runner.IsRunning ? Gold : Muted, L.T(runner.IsRunning ? "Sessão em andamento" : "Sessão parada"));
+            if (runner.IsRunning || runner.ElapsedSeconds > 0)
+            {
+                ImGui.SameLine();
+                ImGui.TextDisabled("· " + TimeSpan.FromSeconds(runner.ElapsedSeconds).ToString(@"h\:mm\:ss"));
+            }
             ImGui.TableNextColumn();
             ImGui.BeginDisabled(runner.IsRunning || startPrompt);
+            PushPrimaryButton();
             if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Play, L.T("Iniciar") + "###start")) { Error = null; request("start"); }
+            ImGui.PopStyleColor(4);
             ImGui.EndDisabled(); ImGui.SameLine();
             ImGui.BeginDisabled(!runner.IsRunning && !startPrompt);
             if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Stop, L.T("Parar") + "###stop")) request("stop");
             ImGui.EndDisabled();
             ImGui.EndTable();
         }
-        if (Error != null) ImGui.TextWrapped(Error);
+        if (Error != null) { ImGui.PushStyleColor(ImGuiCol.Text, Danger); ImGui.TextWrapped(Error); ImGui.PopStyleColor(); }
         else ImGui.TextWrapped(runner.Status);
         if (runner.Selected is { } active)
         {
@@ -178,14 +258,20 @@ internal sealed partial class MainWindow
             if (!startPrompt) ImGui.CloseCurrentPopup();
             else
             {
-                ImGui.TextColored(Gold, L.T("Mantenha seu personagem sob supervisão"));
+                ImGui.PushStyleColor(ImGuiCol.Text, Gold);
+                DrawSymbol(FontAwesomeIcon.ExclamationTriangle); ImGui.SameLine();
+                ImGui.TextUnformatted(L.T("Mantenha seu personagem sob supervisão"));
+                ImGui.PopStyleColor();
+                ImGui.Separator();
                 ImGui.TextWrapped(L.T("O FatePilot move seu personagem, inicia combates e interage com NPCs automaticamente. Fique por perto e acompanhe a sessão. Não deixe o personagem jogando sozinho."));
                 ImGui.Spacing();
                 ImGui.TextWrapped(L.T("Para interromper a qualquer momento, use Parar ou /fatepilot stop."));
                 ImGui.TextWrapped(L.T("Antes de iniciar, pare as outras automações de combate, movimento e viagem."));
                 ImGui.Spacing();
-                if (ImGui.Button(L.T("Entendi, iniciar") + "###confirmStart"))
-                { startPrompt = false; request("confirm-start"); ImGui.CloseCurrentPopup(); }
+                PushPrimaryButton();
+                var confirmed = ImGui.Button(L.T("Entendi, iniciar") + "###confirmStart");
+                ImGui.PopStyleColor(4);
+                if (confirmed) { startPrompt = false; request("confirm-start"); ImGui.CloseCurrentPopup(); }
                 ImGui.SameLine();
                 if (ImGui.Button(L.T("Cancelar") + "###cancelStart"))
                 { startPrompt = false; request("cancel-start"); ImGui.CloseCurrentPopup(); }

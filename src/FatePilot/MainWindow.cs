@@ -60,8 +60,13 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         ImGui.TableNextColumn();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 8) * ImGuiHelpers.GlobalScale);
         ImGui.BeginChild(id, new Vector2(0, 80 * ImGuiHelpers.GlobalScale), true, ImGuiWindowFlags.NoScrollbar);
-        GameIcon(icon, 24); ImGui.SameLine(); ImGui.TextColored(Gold, value);
-        ImGui.TextWrapped(label);
+        // Thin gold accent on the tile's left edge, like a bookmark ribbon.
+        var tile = ImGui.GetWindowPos();
+        var scale = ImGuiHelpers.GlobalScale;
+        ImGui.GetWindowDrawList().AddRectFilled(tile + new Vector2(0, 14 * scale), tile + new Vector2(3 * scale, 66 * scale),
+            ImGui.ColorConvertFloat4ToU32(Gold with { W = .85f }), 2 * scale);
+        GameIcon(icon, 24); ImGui.SameLine(); ImGui.AlignTextToFramePadding(); ImGui.TextColored(Gold, value);
+        ImGui.TextDisabled(label);
         ImGui.EndChild(); ImGui.PopStyleVar();
     }
 
@@ -95,12 +100,42 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         ImGui.PushStyleColor(ImGuiCol.Separator, new Vector4(.21f, .25f, .30f, 1));
     }
 
+    // "What happens next": the FATE being run (or the one that would be picked now),
+    // how far it is and why it won. Uses the runner's own selection rules.
+    private void DrawNextStep()
+    {
+        BeginCard("nextStep");
+        CardTitle(FontAwesomeIcon.Compass, L.T("Próximo passo"));
+        var none = new Dictionary<FateKey, double>();
+        var eligible = World.Fates.Count(f => Selection.Choose(World with { Fates = [f] }, config.Options, none, 0) != null);
+        var next = runner.Selected ?? Selection.Choose(World, config.Options, none, 0);
+        if (next == null)
+        {
+            EmptyState(FontAwesomeIcon.Hourglass, L.T("Nenhum FATE elegível agora."));
+            EndCard();
+            return;
+        }
+        GameIcon(FateIcon(next.Id), 32);
+        ImGui.SameLine();
+        ImGui.BeginGroup();
+        Chip(runner.Selected != null ? L.T("Agora") : L.T("Próximo"), runner.Selected != null ? Success : Gold);
+        ImGui.SameLine(); ImGui.TextUnformatted(next.Name);
+        var distance = Vector3.Distance(World.Position, next.Position);
+        ImGui.TextDisabled($"Lv {next.Level}  ·  " + L.T("{0} m de distância", distance.ToString("N0"))
+            + (eligible > 0 ? "  ·  " + L.T("O mais próximo entre {0} FATEs elegíveis.", eligible) : ""));
+        ImGui.EndGroup();
+        DrawFateProgress(next);
+        EndCard();
+    }
+
     private void DrawSession()
     {
+        DrawNextStep();
         if (ImGui.BeginTable("sessionStats", 4, ImGuiTableFlags.SizingStretchSame))
         {
             Stat("complete", L.T("FATEs concluídos"), runner.Completed.ToString(), 60721);
-            Stat("gemstones", L.T("Gemstones obtidas"), runner.GemstonesEarned.ToString("N0"), ItemIcon(26807));
+            var perHour = runner.ElapsedSeconds >= 300 ? $"  ·  {runner.GemstonesEarned * 3600 / runner.ElapsedSeconds:N0}/h" : "";
+            Stat("gemstones", L.T("Gemstones obtidas"), runner.GemstonesEarned.ToString("N0") + perHour, ItemIcon(26807));
             Stat("zones", L.T("Zonas na rota"), config.Options.Route.Count.ToString(), AetheryteIcon);
             Stat("gil", L.T("Gil comprometido"), (runtime.ReservedGil + runner.GreensGilCommitted).ToString("N0"), ItemIcon(1));
             ImGui.EndTable();
@@ -108,7 +143,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         if (runner.Unconfirmed > 0) ImGui.TextDisabled(L.T("Concluídos: {0}  |  Sem confirmação: {1}", runner.Completed, runner.Unconfirmed));
         ImGui.Spacing();
         BeginCard("returnGoals");
-        ImGui.TextColored(Gold, L.T("Metas de retorno"));
+        CardTitle(FontAwesomeIcon.FlagCheckered, L.T("Metas de retorno"));
         var o = config.Options;
         var goal = o.ReturnAfterFates;
         ImGui.SetNextItemWidth(130 * ImGuiHelpers.GlobalScale);
@@ -124,7 +159,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         DrawGoalProgress();
         EndCard();
         BeginCard("travelPreferences");
-        ImGui.TextColored(Gold, L.T("Movimento"));
+        CardTitle(FontAwesomeIcon.Horse, L.T("Movimento"));
         var mount = o.UseMount;
         if (ImGui.Checkbox(L.T("Usar montaria"), ref mount)) { o.UseMount = mount; SaveSettings(); }
         var fly = o.UseFlight;
@@ -177,21 +212,34 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     private void DrawSelectedRoute()
     {
-        ImGui.TextColored(Gold, L.T("Sua rota ({0} zonas)", config.Options.Route.Count));
+        CardTitle(FontAwesomeIcon.Route, L.T("Sua rota ({0} zonas)", config.Options.Route.Count));
         for (var i = 0; i < config.Options.Route.Count; i++)
         {
             ImGui.PushID(i);
             var d = config.Options.Route[i];
+            // Numbered gold badge, then the zone name, then compact icon controls.
+            var badgeSize = ImGui.GetFrameHeight();
+            var badgeOrigin = ImGui.GetCursorScreenPos();
+            var number = (i + 1).ToString();
+            ImGui.GetWindowDrawList().AddRectFilled(badgeOrigin, badgeOrigin + new Vector2(badgeSize), ImGui.ColorConvertFloat4ToU32(Gold), 5 * ImGuiHelpers.GlobalScale);
+            ImGui.GetWindowDrawList().AddText(badgeOrigin + (new Vector2(badgeSize) - ImGui.CalcTextSize(number)) / 2, 0xFF141414, number);
+            ImGui.Dummy(new Vector2(badgeSize));
+            ImGui.SameLine();
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextUnformatted(zones.FirstOrDefault(z => z.TerritoryId == d.TerritoryId)?.Name ?? d.Name);
+            var buttons = ImGui.GetFrameHeight() * 3 + ImGui.GetStyle().ItemSpacing.X * 2;
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, ImGui.GetContentRegionAvail().X - buttons));
             ImGui.BeginDisabled(i == 0);
-            if (ImGui.ArrowButton("up", ImGuiDir.Up)) { (config.Options.Route[i], config.Options.Route[i - 1]) = (config.Options.Route[i - 1], d); SaveSettings(); }
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.ChevronUp)) { (config.Options.Route[i], config.Options.Route[i - 1]) = (config.Options.Route[i - 1], d); SaveSettings(); }
             ImGui.EndDisabled();
             ImGui.SameLine();
             ImGui.BeginDisabled(i == config.Options.Route.Count - 1);
-            if (ImGui.ArrowButton("down", ImGuiDir.Down)) { (config.Options.Route[i], config.Options.Route[i + 1]) = (config.Options.Route[i + 1], d); SaveSettings(); }
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.ChevronDown)) { (config.Options.Route[i], config.Options.Route[i + 1]) = (config.Options.Route[i + 1], d); SaveSettings(); }
             ImGui.EndDisabled();
             ImGui.SameLine();
-            if (ImGui.SmallButton("X")) { config.Options.Route.RemoveAt(i); SaveSettings(); ImGui.PopID(); break; }
-            ImGui.SameLine(); ImGui.TextUnformatted($"{i + 1}. {zones.FirstOrDefault(z => z.TerritoryId == d.TerritoryId)?.Name ?? d.Name}");
+            if (ImGuiComponents.IconButton(FontAwesomeIcon.TrashAlt)) { config.Options.Route.RemoveAt(i); SaveSettings(); ImGui.PopID(); break; }
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Remover da rota"));
             var hubs = Destinations.Where(x => x.TerritoryId == d.TerritoryId).ToArray();
             if (hubs.Length > 1)
             {
@@ -275,9 +323,9 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         }
         EndCard();
         BeginCard("visibleFates");
-        ImGui.TextColored(Gold, L.T("FATEs nesta zona"));
+        CardTitle(FontAwesomeIcon.MapMarkerAlt, L.T("FATEs nesta zona"));
         DrawFateRows();
-        if (World.Fates.Count == 0) ImGui.TextUnformatted(L.T("Nenhum FATE visível nesta zona."));
+        if (World.Fates.Count == 0) EmptyState(FontAwesomeIcon.Binoculars, L.T("Nenhum FATE visível nesta zona."));
         if (config.Options.ExcludedFates.Count > 0 && ImGui.Button(L.T("Limpar lista de ignorados"))) { config.Options.ExcludedFates.Clear(); SaveSettings(); }
         EndCard();
     }
@@ -311,6 +359,13 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             ImGui.TextWrapped(f.Name);
             if (runner.Selected?.Id == f.Id) ImGui.PopStyleColor();
             ImGui.TextDisabled($"Lv {f.Level}" + (f.Bonus ? "  + " + L.T("Bônus") : ""));
+            // Why this FATE will or won't be picked, at a glance.
+            var reason = runner.Selected?.Id == f.Id ? (L.T("Alvo atual"), Gold)
+                : groupBoss ? (L.T("Chefe de grupo"), Danger)
+                : !included ? (L.T("Ignorado"), Muted)
+                : World.Level > 0 && f.Level > World.Level + config.Options.LevelAbovePlayer ? (L.T("Nível alto"), Danger)
+                : ((string, Vector4)?)null;
+            if (reason is { } chip) { ImGui.SameLine(); Chip(chip.Item1, chip.Item2); }
             if (wide) ImGui.TableNextColumn();
             DrawFateProgress(f);
             ImGui.PopID();
@@ -322,7 +377,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     {
         DrawGreensSettings();
         BeginCard("teleportCosts");
-        ImGui.TextColored(Gold, L.T("Gastos de viagem"));
+        CardTitle(FontAwesomeIcon.Coins, L.T("Gastos de viagem"));
         if (ImGui.BeginTable("travelStats", 3, ImGuiTableFlags.SizingStretchSame))
         {
             Stat("tickets", L.T("Tickets na bolsa"), TicketCount.ToString("N0"), ItemIcon(7569));
@@ -351,13 +406,33 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     private void DrawDiagnostics()
     {
+        BeginCard("integrations");
+        CardTitle(FontAwesomeIcon.Plug, L.T("Integrações"));
         foreach (var (name, available) in Dependencies)
-            ImGui.TextColored(ImGui.ColorConvertFloat4ToU32(available ? new Vector4(0.3f, 0.85f, 0.6f, 1) : new Vector4(1, 0.5f, 0.35f, 1)), $"{(available ? "OK" : "--")}  {name}");
-        ImGui.Separator();
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, available ? Success : Danger);
+            DrawSymbol(available ? FontAwesomeIcon.CheckCircle : FontAwesomeIcon.TimesCircle);
+            ImGui.PopStyleColor();
+            ImGui.SameLine(); ImGui.TextUnformatted(name);
+        }
+        EndCard();
         if (ImGui.SmallButton(L.T("Copiar diagnóstico")))
             ImGui.SetClipboardText("FatePilot " + Version + " / Dalamud API 15\n" + string.Join("\n", Dependencies.Select(d => $"{d.Name}: {d.Available}")) + "\n" + string.Join("\n", Messages));
         ImGui.BeginChild("log", new Vector2(0, 0), true);
-        foreach (var line in Messages.Reverse()) ImGui.TextWrapped(line);
+        if (Messages.Length == 0) EmptyState(FontAwesomeIcon.Stream, L.T("Nenhum evento registrado ainda."));
+        var timeWidth = ImGui.CalcTextSize("00:00:00").X + ImGui.GetStyle().ItemSpacing.X * 2;
+        foreach (var line in Messages.Reverse())
+        {
+            // Lines are "HH:mm:ss  message": dim timestamp column, native details in amber.
+            var hasTime = line.Length > 10 && line[2] == ':' && line[5] == ':';
+            var text = hasTime ? line[10..] : line;
+            var lineStart = ImGui.GetCursorPosX();
+            if (hasTime) { ImGui.TextDisabled(line[..8]); ImGui.SameLine(lineStart + timeWidth); }
+            var technical = text.StartsWith("FATE interaction:") || text.StartsWith("Interaction stopped");
+            if (technical) ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(.93f, .74f, .42f, 1));
+            ImGui.TextWrapped(text);
+            if (technical) ImGui.PopStyleColor();
+        }
         ImGui.EndChild();
     }
 
