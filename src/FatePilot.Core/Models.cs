@@ -54,7 +54,7 @@ public sealed class RunOptions
     public int TicketMinimumFare { get; set; }
     public int MaximumTeleportGil { get; set; }
     public bool RestockGreens { get; set; }
-    public bool SummonChocobo { get; set; }
+    public bool SummonChocobo { get; set; } = true;
     public int GreensThreshold { get; set; } = 10;
     public int GreensTarget { get; set; } = 99;
     public int GreensGilLimit { get; set; } = 10000;
