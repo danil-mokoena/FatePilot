@@ -51,6 +51,8 @@ public sealed class RunOptions
     // Optional city with a gemstone trader, used when the return is caused by gemstones.
     public Destination? GemstoneDestination { get; set; }
     public List<ushort> ExcludedFates { get; set; } = [];
+    // FATEs chosen from the Achievements page: picked first whenever they are eligible.
+    public List<ushort> PriorityFates { get; set; } = [];
     public bool UseTickets { get; set; }
     public bool PayGilWhenTicketsRunOut { get; set; }
     public int TicketMinimumFare { get; set; }
