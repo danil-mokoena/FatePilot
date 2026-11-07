@@ -1,4 +1,6 @@
 {
+  "Reparo indisponível agora; nova tentativa em 1 minuto.": "Réparation indisponible pour l'instant ; nouvel essai dans 1 minute.",
+  "Chefe de grupo: o FatePilot ignora este FATE enquanto “Ignorar chefes de grupo conhecidos” estiver ativo na Sessão.": "Boss de groupe : FatePilot ignore cette ALÉA tant que « Ignorer les boss de groupe connus » est activé dans Session.",
   "O som do aviso ou o número de tentativas contém valores inválidos.": "Le son d'alerte ou le nombre d'essais est invalide.",
   "Interrupção: {0} Tentando retomar ({1}/{2})…": "Interruption : {0} Tentative de reprise ({1}/{2})…",
   "Não foi possível retomar: {0}": "Reprise impossible : {0}",

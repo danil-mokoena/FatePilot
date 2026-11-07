@@ -1,4 +1,6 @@
 {
+  "Reparo indisponível agora; nova tentativa em 1 minuto.": "Reparatur gerade nicht möglich; neuer Versuch in 1 Minute.",
+  "Chefe de grupo: o FatePilot ignora este FATE enquanto “Ignorar chefes de grupo conhecidos” estiver ativo na Sessão.": "Gruppenboss: FatePilot überspringt dieses FATE, solange „Bekannte Gruppenbosse überspringen“ unter Sitzung aktiv ist.",
   "O som do aviso ou o número de tentativas contém valores inválidos.": "Warnton oder Anzahl der Versuche ungültig.",
   "Interrupção: {0} Tentando retomar ({1}/{2})…": "Unterbrochen: {0} Versuche fortzusetzen ({1}/{2})…",
   "Não foi possível retomar: {0}": "Fortsetzen nicht möglich: {0}",

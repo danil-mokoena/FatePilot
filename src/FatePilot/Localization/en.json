@@ -1,4 +1,6 @@
 {
+  "Reparo indisponível agora; nova tentativa em 1 minuto.": "Repair unavailable right now; trying again in 1 minute.",
+  "Chefe de grupo: o FatePilot ignora este FATE enquanto “Ignorar chefes de grupo conhecidos” estiver ativo na Sessão.": "Group boss: FatePilot skips this FATE while “Skip known group bosses” is on in Session.",
   "O som do aviso ou o número de tentativas contém valores inválidos.": "The alert sound or retry count has invalid values.",
   "Interrupção: {0} Tentando retomar ({1}/{2})…": "Interrupted: {0} Trying to resume ({1}/{2})…",
   "Não foi possível retomar: {0}": "Could not resume: {0}",
