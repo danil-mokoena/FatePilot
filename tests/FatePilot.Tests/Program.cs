@@ -26,7 +26,7 @@ Test("Starting requires fresh confirmation and cancellation prevents a delayed s
     Assert(!gate.Confirm(true) && !gate.Pending);
     Assert(gate.Request(false) && gate.Confirm(false));
 });
-RunOptions Options() => new() { ReturnDestination = home, ReturnAfterFates = 1, UseMount = false, IdleSeconds = 10 };
+RunOptions Options() => new() { ReturnDestination = home, ReturnAfterFates = 1, UseMount = false, SummonChocobo = false, IdleSeconds = 10 };
 (Runner Runner, Fake Runtime) Started(World? w = null, RunOptions? o = null)
 {
     var fake = new Fake(); var runner = new Runner(fake); runner.Start(o ?? Options(), w ?? world, 0);
@@ -690,7 +690,13 @@ RunOptions GreensOptions(int threshold=10,int target=99) => new()
     shop=shop with{GreensShop=GreensShopState.Ready,Occupied=true,DialogueOpen=true};
     r.Tick(shop,6); return (r,rt,shop);
 }
-Test("Companion summoning requires opt-in, known inactive state, stock and game permission", () =>
+Test("Companion summoning defaults on while preserving an explicit saved off choice", () =>
+{
+    Assert(new RunOptions().SummonChocobo);
+    Assert(JsonSerializer.Deserialize<RunOptions>("{}")!.SummonChocobo);
+    Assert(!JsonSerializer.Deserialize<RunOptions>("{\"SummonChocobo\":false}")!.SummonChocobo);
+});
+Test("Companion summoning requires enablement, known inactive state, stock and game permission", () =>
 {
     var w=world with{Fates=[],GreensInventory=new(true,10,1000,100),CompanionSecondsLeft=0,CanSummonChocobo=true};
     var o=Options();o.ReturnAfterFates=0;
