@@ -9,7 +9,7 @@ This experimental revision builds on 0.3.1 and retains its NPC dialogue correcti
 - Session groups counters, return goals and movement preferences into outlined panels.
 - FATE rows place their native icon beside the name. Progress and remaining time sit to the right when there is room and below the name at smaller widths. A checked row means the FATE is included; known group bosses remain disabled while their exclusion setting is enabled.
 - Supplies groups Greens into an inventory row: item, current stock, buy-at threshold and target stock, followed by a stock bar and session budget. Further explanation and presets are collapsed by default.
-- A companion panel above stock offers independent, opt-in Chocobo summoning, current companion time and the last local summoning status. It does not extend active timers.
+- A companion panel above stock offers independent, Chocobo summoning (enabled by default), current companion time and the last local summoning status. It does not extend active timers.
 - Travel costs show gil and ticket icons. Route aetheryte selectors show the map symbol. Textures are obtained from the local game through Dalamud; the plugin downloads no artwork.
 - Language settings have a dedicated page. Every new label and the start reminder are translated into all six supported languages.
 

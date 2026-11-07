@@ -12,11 +12,11 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
 - Sidebar navigation, grouped settings panels and a persistent session header with compact Start/Stop controls.
 - Local game icons for FATEs, aetherytes, gil, tickets and supplies. FATE rows show completion bars and remaining time alongside their names.
 - A Supplies page with current Greens stock, editable restock threshold/target, a stock bar and separate shopping/travel budgets.
-- Optional **Automatically summon the chocobo**, independent of restocking and off by default. Enable it in **Supplies**. Uses one Gysahl Greens outside combat when the companion is inactive and the game permits it, including after landing. Active companions are not extended. An unconfirmed summon suspends further item use for that session while the route continues.
+- Optional **Automatically summon the chocobo**, independent of restocking and on by default and configurable in **Supplies**. Uses one Gysahl Greens outside combat when the companion is inactive and the game permits it, including after landing. Active companions are not extended. An unconfirmed summon suspends further item use for that session while the route continues.
 - A supervision reminder before every new session, including command starts. Confirm it to begin; cancel or Stop leaves automation inactive.
 - All new controls and messages in English, Japanese, German, French, Brazilian Portuguese and Spanish. Includes the 0.3.1 NPC speaker fix.
 
-118 local tests pass, with zero build warnings/errors. Native layout, dialogue clicks and Chocobo summoning still need supervised in-game validation; local tests do not prove these native actions work.
+119 local tests pass, with zero build warnings/errors. Native layout, dialogue clicks and Chocobo summoning still need supervised in-game validation; local tests do not prove these native actions work.
 
 ### Fixed in 0.3.1
 
