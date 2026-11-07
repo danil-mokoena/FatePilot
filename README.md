@@ -5,7 +5,18 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.6.2 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.7.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 0.7
+
+- **Route for my level.** From the game data (each FATE's level and its zone), FatePilot picks the unlocked zones with the most FATEs between your level −2 and the allowed levels above (e.g. level 11 → Central Shroud, Lower La Noscea, Middle La Noscea). One click on the Route page, or per gearset on the Jobs page.
+- **History by zone** on the Session page: time, gemstones per hour, FATEs per hour and failure rate for every zone you farm, best zone first. Stored locally, cleared with one click.
+- **Prefer bonus FATEs** (FATEs page, off by default): a bonus FATE wins over a nearer one if it is no more than the chosen number of yalms farther.
+- **Wait where FATEs appear** (Route page, on by default): with nothing eligible, FatePilot flies once to the spot where FATEs appeared most often in that zone, learned from your history.
+- **Minutes per zone** (Route page): move to the next route zone after N minutes, between FATEs.
+- Achievements and Jobs: row icons and buttons centered, gearset buttons aligned in one column, "All earned" capitalized.
+
+141 local tests pass, with zero build warnings/errors. The level route, idle positioning and zone budget need in-game validation.
 
 ### New in 0.6
 
@@ -221,7 +232,7 @@ Persistent history across sessions, automatic potion use, voucher purchases, par
 
 ### Next milestones
 
-Next (0.7): make better use of idle time, weigh FATEs by reward, per-zone time budgets and a local history of gemstones per hour by zone. Live validation of NPC-started events, the aethernet gateway, self-repair and job switching continues alongside. External tracker integration remains a separate future investigation.
+Next (0.8): notifications, one automatic retry after recoverable stops, and automatic gemstone exchange. Live validation of NPC-started events, the aethernet gateway, self-repair and job switching continues alongside. External tracker integration remains a separate future investigation.
 
 ## Privacy and security
 
