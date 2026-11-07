@@ -95,27 +95,36 @@ public sealed partial class Runner
 
     // ---------- Self-repair ----------
     private bool repairDisabled;
-    private int durabilityBefore;
+    private int durabilityBefore, repairRefusals;
+    private double nextRepairAttempt;
     public int Repairs { get; private set; }
+    private const int RepairRefusalLimit = 3;
 
     private bool SelfRepairActive => options.SelfRepair && !repairDisabled;
 
     private bool TryRepair(World w, double now)
     {
         if (!SelfRepairActive || w.MinDurability < 0 || w.MinDurability >= options.RepairBelowPercent || PendingReturnGoal != ReturnGoal.None ||
-            w.InCombat || w.Mounted || w.Flying || w.Casting || w.Occupied || w.DialogueOpen || w.TravelBusy || w.RepairBusy)
+            w.InCombat || w.Mounted || w.Flying || w.Casting || w.Occupied || w.DialogueOpen || w.TravelBusy || w.RepairBusy || now < nextRepairAttempt)
             return false;
-        if (!w.CanSelfRepair)
-        {
-            repairDisabled = true;
-            runtime.Log(L.T("Reparo próprio indisponível (Dark Matter ou nível de artesão). Desativado nesta sessão."));
-            return false;
-        }
+        // The game can refuse the Repair action for a moment (animation lock, just after combat):
+        // try again a minute later and give up for the session only after a few refusals.
+        if (!w.CanSelfRepair) { RepairRefused(L.T("Reparo próprio indisponível (Dark Matter ou nível de artesão). Desativado nesta sessão."), now); return false; }
         runtime.StopMovement(); runtime.SetCombat(false);
-        if (!runtime.StartRepair()) { repairDisabled = true; runtime.Log(L.T("O jogo recusou a janela de reparo. Reparo desativado nesta sessão.")); return false; }
+        if (!runtime.StartRepair()) { RepairRefused(L.T("O jogo recusou a janela de reparo. Reparo desativado nesta sessão."), now); return false; }
+        repairRefusals = 0;
         durabilityBefore = w.MinDurability;
         Enter(RunState.Repairing, L.T("Reparando o equipamento com Dark Matter."), now);
         return true;
+    }
+
+    private void RepairRefused(string finalMessage, double now)
+    {
+        nextRepairAttempt = now + 60;
+        if (++repairRefusals < RepairRefusalLimit) { runtime.Log(L.T("Reparo indisponível agora; nova tentativa em 1 minuto.")); return; }
+        repairDisabled = true;
+        runtime.Log(finalMessage);
+        Alert(NotifyKind.Problem, finalMessage);
     }
 
     private void TickRepair(World w, double now)
@@ -183,7 +192,8 @@ public sealed partial class Runner
         pauseRequested = PauseAfterFate = false;
         pausedAt = pausedTotal = 0;
         foodPending = foodDisabled = repairDisabled = false;
-        nextFoodAttempt = double.NegativeInfinity;
+        nextFoodAttempt = nextRepairAttempt = double.NegativeInfinity;
+        repairRefusals = 0;
         FoodUsed = GreensUsed = Repairs = JobSwitches = 0;
         expectedJob = 0;
     }

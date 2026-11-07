@@ -28,9 +28,14 @@ public sealed partial class Runner
     // module) release control, wait for the game to settle and resume — at most MaxRetries times.
     private bool TryRecover(string reason, double now)
     {
-        if (!options.AutoRetry || retriesUsed >= options.MaxRetries) return false;
+        // A purchase already sent must be reconciled, never abandoned: that one always stops.
+        if (!options.AutoRetry || retriesUsed >= options.MaxRetries || purchase != null) return false;
         retriesUsed++;
         retryReason = reason;
+        // Forget a half-done restock trip; the next selection starts it again if still needed.
+        restockStage = RestockStage.None; closeRequested = false;
+        nextInstance = 0;
+        waitingForPlayerDialog = false;
         runtime.StopMovement();
         runtime.CancelEventInteraction();
         runtime.SetCombat(false);

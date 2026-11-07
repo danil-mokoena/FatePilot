@@ -49,8 +49,16 @@ public sealed partial class Runner
         if ((w.Occupied || w.DialogueOpen) && (!shopPhase || w.GreensShop == GreensShopState.None))
         {
             if (!w.DialogueOpen && now < transitionUntil) return;
-            Stop(L.T("Um diálogo ou outra interação interrompeu a sessão.")); return;
+            // A plain prompt the player opened on the way (discard item, confirmations): wait, never click.
+            if (!shopPhase && w.DialogueOpen && !w.Occupied)
+            {
+                runtime.StopMovement();
+                if (!waitingForPlayerDialog) { waitingForPlayerDialog = true; runtime.Log(L.T("Janela aberta pelo jogador; aguardando ela fechar.")); }
+                return;
+            }
+            StopOrRecover(L.T("Um diálogo ou outra interação interrompeu a sessão."), now); return;
         }
+        waitingForPlayerDialog = false;
         if (purchase is { } pending)
         {
             var result = pending.Observe(w.GreensInventory, now);
