@@ -48,6 +48,9 @@ public sealed class InteractionLease
             return InteractionStatus.Owned;
         }
         if (!observed && now - started < 3) return InteractionStatus.Waiting;
+        // Hand-over between windows of our own conversation (last Talk page → Yes/No):
+        // the character stays occupied for a moment with neither window recognisable yet.
+        if (observed && now - lastOwned < 1.5) return InteractionStatus.Waiting;
         Cancel();
         return InteractionStatus.Foreign;
     }
