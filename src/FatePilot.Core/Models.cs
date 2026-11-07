@@ -53,6 +53,11 @@ public sealed class RunOptions
     public List<ushort> ExcludedFates { get; set; } = [];
     // FATEs chosen from the Achievements page: picked first whenever they are eligible.
     public List<ushort> PriorityFates { get; set; } = [];
+    // 0.7: weigh bonus FATEs against distance, wait where FATEs usually appear, time budget per zone.
+    public bool PreferRewards { get; set; }
+    public int BonusWorthYalms { get; set; } = 200;
+    public bool IdleToHotspot { get; set; } = true;
+    public int MinutesPerZone { get; set; }
     public bool UseTickets { get; set; }
     public bool PayGilWhenTicketsRunOut { get; set; }
     public int TicketMinimumFare { get; set; }
@@ -95,6 +100,8 @@ public sealed class RunOptions
             throw new InvalidOperationException(L.T("Escolha um aetheryte por zona, sem repetir zonas."));
         if (ReturnWhenBagSlotsBelow is < 0 or > 140 || ReturnWhenDurabilityBelow is < 0 or > 99 || RepairBelowPercent is < 1 or > 99 || FoodRefreshMinutes is < 1 or > 60)
             throw new InvalidOperationException(L.T("Os limites de bolsa, durabilidade, reparo ou comida contêm valores inválidos."));
+        if (MinutesPerZone is < 0 or > 600 || BonusWorthYalms is < 0 or > 2000)
+            throw new InvalidOperationException(L.T("O tempo por zona ou o peso do bônus contém valores inválidos."));
         if (UseFood && FoodItemId == 0)
             throw new InvalidOperationException(L.T("Escolha uma comida da bolsa ou desative o uso de comida."));
         if (UseJobQueue && (JobQueue.Count == 0 || JobQueue.Any(j => j.TargetLevel is < 1 or > 100 || j.Job is 0 or (>= 8 and <= 18))))

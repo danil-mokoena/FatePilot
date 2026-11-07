@@ -30,6 +30,11 @@ public sealed partial class Runner(IRuntime runtime)
     private bool participated, sawLoading, returning, waitingForPlayerDialog;
     private int nextInstance;
     private Destination? teleportDestination;
+    // 0.7: local per-zone history shared with the plugin configuration.
+    public ZoneHistory History { get; set; } = new();
+    private readonly HashSet<FateKey> seenFates = [];
+    private double lastHistoryTick, zoneSince;
+    private bool idleMoved;
 
     public void Start(RunOptions config, World world, double now)
     {
@@ -67,6 +72,7 @@ public sealed partial class Runner(IRuntime runtime)
             lastAction = now - 10;
             transitionUntil = -1;
             idleSince = noEnemySince = now;
+            seenFates.Clear(); lastHistoryTick = zoneSince = now; idleMoved = false;
             Enter(RunState.Selecting, L.T("Procurando FATEs elegíveis."), now);
         }
         catch (Exception ex) { Stop(L.T("Não foi possível iniciar: {0}", ex.GetBaseException().Message), true); }
@@ -92,14 +98,17 @@ public sealed partial class Runner(IRuntime runtime)
             if (State != RunState.Paused) ElapsedSeconds = Math.Max(ElapsedSeconds, now - sessionStarted - pausedTotal);
             if (w.LoggedIn && !w.Loading)
             {
-                GemstonesEarned += Math.Max(0, w.Gemstones - previousGemstones);
+                var gained = Math.Max(0, w.Gemstones - previousGemstones);
+                GemstonesEarned += gained;
+                if (gained > 0 && State != RunState.Paused) History.For(w.Territory).Gems += gained;
                 previousGemstones = w.Gemstones;
             }
             if (!w.LoggedIn && !w.Loading) { Stop(L.T("Sessão encerrada: personagem desconectado."), true); return; }
             if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
             if (w.Job != 0 && w.Job != sessionJob && State is not (RunState.Paused or RunState.SwitchingJob)) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
-            if (State == RunState.Paused) return;
+            if (State == RunState.Paused) { lastHistoryTick = now; return; }
+            RecordHistory(w, now);
             ObserveCompanion(w, now);
             ObserveFood(w, now);
             ApplyPendingOptions(w);
@@ -193,6 +202,15 @@ public sealed partial class Runner(IRuntime runtime)
         if (TryRepair(w, now)) return;
         if (TryAdvanceJobQueue(w, now)) return;
         if (TryEatFood(w, now)) return;
+        // Zone time budget: move on to the next route zone after N minutes, between FATEs.
+        if (options.MinutesPerZone > 0 && now - zoneSince >= options.MinutesPerZone * 60 &&
+            Selection.NextZone(options.Route, w.Territory) is { } budgetZone)
+        {
+            runtime.Log(L.T("{0} min nesta zona; seguindo para {1}.", options.MinutesPerZone, budgetZone.Name));
+            nextInstance = 0;
+            Teleport(budgetZone, w, now);
+            return;
+        }
         if (options.Route.Count > 0 && options.Route.All(d => d.TerritoryId != w.Territory))
         {
             Teleport(options.Route[0], w, now);
@@ -208,6 +226,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (fate != null)
         {
             Selected = fate;
+            idleMoved = false;
             selectedKey = Selection.Key(fate, w);
             participated = false;
             ResetObjectives(fate, now);
@@ -216,6 +235,7 @@ public sealed partial class Runner(IRuntime runtime)
             return;
         }
         if (State != RunState.Waiting) { idleSince = now; Enter(RunState.Waiting, L.T("Aguardando FATEs elegíveis."), now); }
+        if (TryIdleToHotspot(w, now)) return;
         if (now - idleSince < options.IdleSeconds) return;
         visited.Add(w.Instance);
         var instance = options.RotateInstances ? Selection.NextInstance(w.Instance, w.InstanceCount, visited) : null;
@@ -253,9 +273,10 @@ public sealed partial class Runner(IRuntime runtime)
             if (participated && current != null && (current.State == EventState.Ended || (current.Progress >= 100 && current.State != EventState.Failed)))
             {
                 Completed++;
+                History.For(expectedTerritory).Fates++;
                 runtime.Log(L.T("FATE concluído observado: {0}. Total: {1}.", Selected?.Name, Completed));
             }
-            else if (participated) { Unconfirmed++; runtime.Log(L.T("FATE terminou/desapareceu sem confirmação de sucesso; não conta para a meta.")); }
+            else if (participated) { Unconfirmed++; History.For(expectedTerritory).Failed++; runtime.Log(L.T("FATE terminou/desapareceu sem confirmação de sucesso; não conta para a meta.")); }
             excludedUntil[selectedKey] = now + 300;
             Selected = null;
             Enter(RunState.Selecting, L.T("Verificando o próximo FATE."), now);
@@ -442,6 +463,7 @@ public sealed partial class Runner(IRuntime runtime)
 
     private void Arrived(World w, double now)
     {
+        zoneSince = now; idleMoved = false;
         if (returning)
         {
             runtime.End();
@@ -496,6 +518,34 @@ public sealed partial class Runner(IRuntime runtime)
         if (w.Territory != expectedTerritory) { Stop(L.T("Troca de instância terminou em uma zona inesperada."), true); return; }
         nextInstance = 0;
         Enter(RunState.Selecting, L.T("Instância confirmada; procurando FATEs."), now);
+    }
+
+    // Time spent and where FATEs appear, per zone (paused time and loading screens excluded).
+    private void RecordHistory(World w, double now)
+    {
+        var dt = Math.Clamp(now - lastHistoryTick, 0, 2);
+        lastHistoryTick = now;
+        if (w.Loading || !w.LoggedIn || w.Territory == 0) return;
+        History.For(w.Territory).Seconds += dt;
+        foreach (var f in w.Fates)
+            if (f.TerritoryId == w.Territory && seenFates.Add(Selection.Key(f, w))) History.RecordSpot(w.Territory, f.Position);
+    }
+
+    // While waiting with nothing eligible, fly once to where FATEs most often appear in this zone.
+    private bool TryIdleToHotspot(World w, double now)
+    {
+        if (!options.IdleToHotspot || idleMoved || PendingReturnGoal != ReturnGoal.None || w.InCombat || w.Casting ||
+            !w.NavReady || w.NavBusy || History.Hotspot(w.Territory) is not { } spot || System.Numerics.Vector3.Distance(w.Position, spot) < 60)
+            return false;
+        if (options.UseMount && !w.Mounted)
+        {
+            if (Throttle(now, 3)) { transitionUntil = now + 5; runtime.Mount(); }
+            return true;
+        }
+        runtime.Move(spot, options.UseFlight && w.CanFly && w.Mounted);
+        idleMoved = true;
+        Status = L.T("Aguardando FATEs no ponto onde mais aparecem nesta zona.");
+        return true;
     }
 
     // User-requested skip of the current FATE (5-minute ignore, then pick the next one).

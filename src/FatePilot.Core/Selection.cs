@@ -13,9 +13,13 @@ public static class Selection
             && (f.State == EventState.Preparing || f.SecondsLeft >= o.MinimumSecondsLeft) && !o.ExcludedFates.Contains(f.Id)
             && (!excludedUntil.TryGetValue(Key(f, w), out var until) || until <= now))
         .OrderByDescending(f => o.PriorityFates.Contains(f.Id))
-        .ThenBy(f => Vector3.Distance(w.Position, f.Position))
+        .ThenBy(f => Score(f, w, o))
         .ThenByDescending(f => o.PreferBonus && f.Bonus)
         .ThenBy(f => f.Id).FirstOrDefault();
+
+    // Lower is better: distance, minus what a bonus is worth in yalms when rewards are preferred.
+    public static float Score(FateInfo f, World w, RunOptions o) =>
+        Vector3.Distance(w.Position, f.Position) - (o.PreferRewards && f.Bonus ? o.BonusWorthYalms : 0);
 
     public static int? NextInstance(int current, int count, ISet<int> visited)
     {
