@@ -560,6 +560,16 @@ Test("A prompt the player opens (discard item) is waited out, never clicked, and
     r.Tick(inside with { DialogueOpen=true, Occupied=true },32);
     Assert(!r.IsRunning, "An unrelated NPC event still stops the session");
 });
+Test("A prioritized FATE (from Achievements) is chosen before a nearer one", () =>
+{
+    var near=fate with { Id=1, Position=new(10,0,0) }; var far=fate with { Id=2, Name="Boss FATE", Position=new(400,0,0) };
+    var o=Options(); var none=new Dictionary<FateKey,double>();
+    Assert(Selection.Choose(world with { Fates=[near,far] }, o, none, 0)?.Id==1);
+    o.PriorityFates=[2];
+    Assert(Selection.Choose(world with { Fates=[near,far] }, o, none, 0)?.Id==2);
+    o.ExcludedFates=[2];
+    Assert(Selection.Choose(world with { Fates=[near,far] }, o, none, 0)?.Id==1, "Ignore list still wins");
+});
 Test("Session summary is kept after stopping", () =>
 {
     var (r,_)=Started(); var inside=Engage(r);
