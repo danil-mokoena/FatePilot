@@ -260,8 +260,8 @@ Test("Local conversation advances several pages and only its own confirmation", 
     }
     Assert(!guard.Observe(true,true,false,false,false,0,5.25));
     Assert(guard.Observe(true,true,false,false,true,700,6));
-    Assert(!guard.Observe(true,true,false,false,true,701,6));
-    Assert(!guard.Observe(true,true,false,false,true,700,11));
+    Assert(guard.Observe(true,true,false,false,true,701,6), "The FATE start Yes/No has its own callback");
+    Assert(!guard.Observe(true,true,false,false,true,700,11), "A prompt long after the conversation is not ours");
 });
 Test("Local conversation never overrides another actor, speaker or populated event", () =>
 {
@@ -529,6 +529,36 @@ Test("Gemstone balance return goes to the chosen trader city; other goals use th
     r.Tick(inside with { Fates=[fate with { Progress=100 }] },7); r.Tick(inside with { InCombat=false, Fates=[] },8);
     Assert(r.PendingReturnGoal==ReturnGoal.Fates && f.Teleports.Single()==home);
     Assert(GemstoneTraders.Has(tuliyollal) && !GemstoneTraders.Has(home));
+});
+Test("FATE start Yes/No is accepted right after our conversation or interaction, never otherwise", () =>
+{
+    var guard=new LocalDialogueGuard();
+    Assert(guard.Observe(true,true,true,true,false,700,1));
+    Assert(guard.Observe(true,true,false,false,true,950,3), "Different callback right after the verified pages");
+    var direct=new LocalDialogueGuard();
+    Assert(direct.Observe(true,true,false,false,true,950,1,recentInteraction:true), "Prompt opened directly by our interaction");
+    var player=new LocalDialogueGuard();
+    Assert(!player.Observe(true,true,false,false,true,950,1), "A prompt with no conversation or interaction of ours");
+    Assert(!new LocalDialogueGuard().Observe(true,false,false,false,true,950,1,recentInteraction:true), "Never when the FATE NPC is not the bound target");
+    Assert(!new LocalDialogueGuard().Observe(false,true,false,false,true,950,1,recentInteraction:true), "Never during another native event");
+});
+Test("Occupied hand-over between the last page and the Yes/No keeps ownership briefly", () =>
+{
+    var lease=new InteractionLease(); lease.Begin(502,[0x801A0001],0);
+    Assert(lease.Observe(1,true,default,default,false,0,true)==InteractionStatus.Owned);
+    Assert(lease.Observe(1.8,true,default,default,false,0,false)==InteractionStatus.Waiting, "Occupied, no window yet");
+    Assert(lease.Observe(2.2,true,default,default,false,0,true)==InteractionStatus.Owned, "Yes/No recognised");
+    Assert(lease.Observe(4,true,default,default,false,0,false)==InteractionStatus.Foreign, "A longer unknown dialog is still refused");
+});
+Test("A prompt the player opens (discard item) is waited out, never clicked, and does not stop the session", () =>
+{
+    var (r,f)=Started(); var inside=Engage(r);
+    var advances=f.Advances;
+    r.Tick(inside with { DialogueOpen=true },7); r.Tick(inside with { DialogueOpen=true },30);
+    Assert(r.IsRunning && f.Advances==advances, "No clicks on a dialog the plugin did not open");
+    r.Tick(inside,31); Assert(r.IsRunning && r.State==RunState.Fighting);
+    r.Tick(inside with { DialogueOpen=true, Occupied=true },32);
+    Assert(!r.IsRunning, "An unrelated NPC event still stops the session");
 });
 Test("Session summary is kept after stopping", () =>
 {
