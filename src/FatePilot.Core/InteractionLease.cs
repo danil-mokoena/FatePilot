@@ -15,6 +15,10 @@ public sealed class InteractionLease
     private double started;
     private bool observed;
     private double lastOwned;
+    // Long pre-FATE conversations (8+ pages, two clicks per page while text types)
+    // exceeded the old 15 s cap and were dropped mid-dialogue. The cap bounds a
+    // stuck window, not a healthy conversation.
+    public const double MaxSeconds = 60;
     public bool Active => actor != 0;
 
     public void Begin(ulong actorId, IEnumerable<uint> eventIds, double now)
@@ -29,7 +33,7 @@ public sealed class InteractionLease
     public InteractionStatus Observe(double now, bool occupiedOrDialog, EventSignal first, EventSignal second, bool matchingSelector, ulong sceneObject = 0, bool matchingLocalDialog = false)
     {
         if (!Active) return InteractionStatus.None;
-        if (now - started >= 15) { Cancel(); return InteractionStatus.Expired; }
+        if (now - started >= MaxSeconds) { Cancel(); return InteractionStatus.Expired; }
         if (!occupiedOrDialog && !matchingSelector)
         {
             if (observed && now - lastOwned < 1) return InteractionStatus.Waiting;

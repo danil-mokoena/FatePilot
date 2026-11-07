@@ -42,6 +42,10 @@ public sealed partial class Runner(IRuntime runtime)
                 throw new InvalidOperationException(L.T("O limite de gemstones não está disponível ou a reserva é maior que o limite."));
             if (!world.LoggedIn || world.Loading || world.Dead || world.Restricted || world.InCombat || world.Occupied || world.DialogueOpen || world.Casting)
                 throw new InvalidOperationException(L.T("Inicie em mundo aberto, vivo, fora de combate e com os diálogos fechados."));
+            // Crafters (8-15) and gatherers (16-18) have no combat rotation; the ability
+            // module rejects them with an opaque reflection error.
+            if (world.Job is 0 or (>= 8 and <= 18))
+                throw new InvalidOperationException(L.T("Troque para uma classe de combate antes de iniciar."));
             runtime.Begin(options);
             Completed = Unconfirmed = 0;
             GemstonesEarned = 0;
@@ -64,7 +68,7 @@ public sealed partial class Runner(IRuntime runtime)
             idleSince = noEnemySince = now;
             Enter(RunState.Selecting, L.T("Procurando FATEs elegíveis."), now);
         }
-        catch (Exception ex) { Stop(L.T("Não foi possível iniciar: {0}", ex.Message), true); }
+        catch (Exception ex) { Stop(L.T("Não foi possível iniciar: {0}", ex.GetBaseException().Message), true); }
     }
 
     public void Stop(string? reason = null, bool fault = false)
@@ -149,7 +153,7 @@ public sealed partial class Runner(IRuntime runtime)
                 case RunState.HubApproach: TickHub(w, now); break;
             }
         }
-        catch (Exception ex) { Stop(ex.Message, true); }
+        catch (Exception ex) { runtime.Log($"{ex.GetBaseException().GetType().Name}: {ex.GetBaseException().Message}"); Stop(ex.GetBaseException().Message, true); }
     }
 
     private void Select(World w, double now)

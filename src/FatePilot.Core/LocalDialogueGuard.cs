@@ -14,6 +14,11 @@ public sealed class LocalDialogueGuard
         if (receiver == 0) { Reset(); return false; }
         if (talk && !yesNo && speakerMatches)
         { callback = receiver; lastTalk = now; return true; }
+        // Later pages of an already verified conversation may show narration, the
+        // player's own line or a second speaker. They stay ours only while the same
+        // native callback keeps driving the Talk window without a gap.
+        if (talk && !yesNo && callback != 0 && receiver == callback && now - lastTalk <= 5)
+        { lastTalk = now; return true; }
         if (talk) { Reset(); return false; }
         return yesNo && receiver == callback && now - lastTalk <= 5;
     }
