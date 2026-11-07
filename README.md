@@ -5,7 +5,14 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.7.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.8.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 0.8
+
+- **Alerts** (Settings → Alerts): one of the game's 16 chat sounds (`<se.1>`–`<se.16>`, with a test button) and a local chat line when the session stops on its own, a goal is reached or the return finishes, a prioritized FATE appears, repair/food/Chocobo fail or a retry happens, and when a tell arrives during a session. For tells only the fact that one arrived is used; sender and text are never read or stored. Nothing leaves the game.
+- **Automatic retry** (Settings → Automatic retry, on by default, 1–5 attempts per session): after a recoverable interruption — an unexpected dialog, unexpected loading screen or zone change, or a busy travel module — FatePilot gives control back, waits for the game to settle (up to 2 minutes), adopts the current zone and job and continues. Death, logout, instanced content and group bosses always stop the session.
+
+144 local tests pass, with zero build warnings/errors. Alerts and retries need in-game validation.
 
 ### New in 0.7
 
@@ -232,7 +239,7 @@ Persistent history across sessions, automatic potion use, voucher purchases, par
 
 ### Next milestones
 
-Next (0.8): notifications, one automatic retry after recoverable stops, and automatic gemstone exchange. Live validation of NPC-started events, the aethernet gateway, self-repair and job switching continues alongside. External tracker integration remains a separate future investigation.
+Next: automatic gemstone exchange (validated in game first), then a minimap, themes, hotkeys and shareable profiles. Live validation of NPC-started events, the aethernet gateway, self-repair and job switching continues alongside. External tracker integration remains a separate future investigation.
 
 ## Privacy and security
 
