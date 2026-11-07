@@ -5,7 +5,16 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.8.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.9.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 0.9
+
+- **Map page.** The zone's own map from the game, centred on you, with a live layer on top: every FATE's area with a progress ring and its icon, the current FATE highlighted with the path to it, prioritized and ignored FATEs, the spot where FATEs appear most often, the aetheryte, enemies (red when they target you) and an arrow that turns with your character. Zoom with the slider, the buttons or the mouse wheel; hover a FATE for its level, progress, time left, map coordinates and distance. Optionally shown in the compact panel too.
+- **Themes** (Settings → Appearance): Chocobo (the original gold), Ishgard, Gridania, Limsa Lominsa, Ul'dah and Sharlayan, each previewed as a miniature of the window. Applies to the window and the compact panel.
+- **Keyboard shortcuts** (Settings → Keyboard shortcuts): pause/resume, skip the current FATE, stop, start (still with the confirmation) and show/hide the window. Ctrl and/or Alt are required, and shortcuts are ignored while you type in chat. New `/fatepilot toggle` and `/fatepilot skip` commands work as game macros on your hotbar.
+- **Shareable profiles** (Route → Share profiles): copy a saved profile as a `FATEPILOT1:` text code and paste someone else's to preview it (route with your client's zone names, locked aetherytes flagged) before saving it as a new profile. Codes carry only session settings; the job queue (your gearsets) is left out. Codes are size-limited, validated and never applied without your click.
+
+155 local tests pass, with zero build warnings/errors. The map, themes and shortcuts need in-game validation.
 
 ### Fixed in 0.8.1 (full code review)
 
