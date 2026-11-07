@@ -5,7 +5,22 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.4.2 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.5.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 0.5
+
+- **Pause and resume.** Pause now, or schedule a pause after the current FATE, from the session header, the compact panel or `/fatepilot pause`. Pausing releases movement, rotation and pathing so you can play by hand; counters, spending and the route are kept and paused time is not counted. Resuming adopts your current zone and job.
+- **Jobs page: per-level job queue.** Pick combat gearsets (with their job icons and current levels) and a target level for each. Between FATEs, when the current job reaches its target, FatePilot equips the next gearset and continues; when the queue is finished it returns to the return city.
+- **Inventory page.**
+  - *Gemstones:* balance vs. cap bar, a "return at this balance" slider up to the cap, and an optional city with a gemstone trader (Tuliyollal, Solution Nine, Old Sharlayan, Radz-at-Han, The Crystarium, Eulmore) used when the return is caused by gemstones.
+  - *Repair:* lowest equipped durability, Dark Matter count and automatic self-repair between FATEs (Repair All, confirmed by the durability increase; disabled for the session if not confirmed).
+  - *Food:* pick a meal from your bags (with its icon); FatePilot eats it out of combat before Well Fed runs out and confirms the new timer.
+  - *Limits:* return when free bag slots or gear durability fall below a value.
+- **Route profiles.** Save every setting under a name (route, filters, goals, costs, inventory and jobs) and load it with one click.
+- **Session summary** after each session: FATEs and gemstones (with per-hour rates), time, gil, Greens, food, repairs and job changes.
+- **Interface.** Grouped sidebar (Session · Character · Tools) with About and Settings at the bottom, consistent margins on every page, game icons in the compact panel (gemstones, gil) and the plugin names in Settings → Dependencies.
+
+133 local tests pass, with zero build warnings/errors. Pause/resume, the job queue, self-repair, food and the gemstone-trader return still need supervised in-game validation.
 
 ### New in 0.4.2
 
@@ -76,9 +91,9 @@ Validate development without creating release ZIPs or changing the catalog: `./b
 | Collection | Ground pickups, objective enemies and repeated NPC hand-ins; default batch of 15, with partial deliveries after 45 seconds or near the end |
 | Escort and defense | Follow the associated friendly objective and fight event enemies |
 | Travel | Zone image cards grouped by expansion, reorderable routes, discovered instance rotation, mounts, unlocked flight, level sync and zones without an aetheryte reached through a neighbouring city's aethernet (Dravanian Hinterlands via Idyllshire) |
-| Session goals | Return by completed FATEs, earned gemstones, elapsed time or currency-cap reserve |
+| Session goals | Return by completed FATEs, earned gemstones, elapsed time, a gemstone balance (with an optional gemstone-trader city), free bag slots, gear durability or a finished job queue |
 | Teleport costs | Aetheryte Ticket switch, minimum fare, explicit gil fallback and a session gil budget |
-| Supplies | Separate optional Chocobo summoning and Greens restocking, verified vendor and purchase budget |
+| Supplies and inventory | Chocobo summoning and Greens restocking; self-repair with Dark Matter, food upkeep and bag/durability limits on the Inventory page |
 | Recovery | Stuck-route handling, operation timeouts, control conflict detection and restoration of previous settings |
 | Interface | Slate and gold sidebar, compact session panel with Stop/Skip, next-step panel, reason chips, local game icons, live settings edits, completion bars, dependency check and supervision reminder |
 | Faloop | Click-only world-filtered companion link; no report or timer import |
@@ -178,17 +193,19 @@ English · 日本語 · Deutsch · Français · **Português (Brasil)** · Espa�
 | `/fatepilot start` | Open the supervision reminder before starting |
 | `/fatepilot stop` | Stop and restore previous settings |
 | `/fatepilot status` | Print the current state to local chat |
+| `/fatepilot pause` | Pause now and give character control back (counters and route are kept) |
+| `/fatepilot resume` | Resume a paused session |
 | `/fatepilot recover` | Restore a previous session's local recovery record while stopped |
 
 ## Scope and limitations
 
 Supported overworld rules include combat, collection, escort and defense. A preparing event is eligible only when it exposes a starter NPC. Event-specific mechanics or dialogue variants may still be unsupported. Completion means an observed successful end after participation; a disappearing FATE without confirmation does not count toward the return goal.
 
-Saved route profiles, persistent history, job queues, repairs, automatic food/potion use, voucher purchases, party coordination and general inventory/equipment stop conditions are not implemented. Greens purchasing, Chocobo summoning and elapsed-time return goals are included. There are no GM detection or concealment features.
+Persistent history across sessions, automatic potion use, voucher purchases, party coordination and GM detection or concealment are not implemented. Route profiles, pause/resume, job queues, self-repair, food upkeep, bag/durability limits and the session summary are included.
 
 ### Next milestones
 
-The next version (0.5) focuses on session control: saved route profiles, pause and resume, inventory and durability limits, a session summary and a per-level job queue. Live validation of NPC-started events, collection hand-ins, escorts and the aethernet gateway continues alongside. External tracker integration remains a separate future investigation.
+Next (0.6): make better use of idle time, weigh FATEs by reward, per-zone time budgets and a local history of gemstones per hour by zone. Live validation of NPC-started events, the aethernet gateway, self-repair and job switching continues alongside. External tracker integration remains a separate future investigation.
 
 ## Privacy and security
 
