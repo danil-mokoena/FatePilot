@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.8.1</Version>
+    <Version>0.9.0</Version>
     <Author>Mokoena</Author>
     <Name>FatePilot</Name>
     <Punchline>Chart your route. Find your destiny.</Punchline>

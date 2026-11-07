@@ -1,3 +1,5 @@
+using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Command;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -16,6 +18,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly MainWindow window;
     private readonly ConcurrentQueue<(string Action, RunOptions? Options)> requests = new();
     private readonly StartConfirmation startConfirmation = new();
+    private readonly HotkeyTracker hotkeys = new();
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private double lastTick, lastCatalog = -100, lastError = -100, lastHistorySave;
     private bool wasRunning;
@@ -31,7 +34,7 @@ public sealed class Plugin : IDalamudPlugin
         window = new(config, runner, runtime, Request);
         Services.Commands.AddHandler("/fatepilot", new CommandInfo(OnCommand)
         {
-            HelpMessage = "/fatepilot | start | stop | pause | resume | status | recover",
+            HelpMessage = "/fatepilot | start | stop | pause | resume | toggle | skip | status | recover",
         });
         Services.Framework.Update += Update;
         Services.Chat.ChatMessage += OnChat;
@@ -51,8 +54,32 @@ public sealed class Plugin : IDalamudPlugin
     {
         var action = args.Trim().ToLowerInvariant();
         if (action.Length == 0) window.Open();
-        else if (action is "start" or "stop" or "status" or "recover" or "pause" or "resume") Request(action);
-        else Services.Chat.Print("/fatepilot | start | stop | pause | resume | status | recover");
+        else if (action is "start" or "stop" or "status" or "recover" or "pause" or "resume" or "toggle" or "skip") Request(action);
+        else Services.Chat.Print("/fatepilot | start | stop | pause | resume | toggle | skip | status | recover");
+    }
+
+    // 0.9 keyboard shortcuts: polled every frame (presses are short), never while typing.
+    private void PollHotkeys()
+    {
+        if (config.Hotkeys.Count == 0) return;
+        bool typing;
+        try { typing = window.HotkeysBlocked || !Services.Client.IsLoggedIn || ImGui.GetIO().WantTextInput || GameTextInputActive(); }
+        catch (Exception) { typing = true; }
+        foreach (var action in hotkeys.Update(key => Services.Keys[(VirtualKey)key], typing, config.Hotkeys))
+        {
+            if (action == "window") window.Toggle();
+            else if (action == "start" && runner.IsRunning) continue;
+            else if (action is "toggle" or "skip" or "stop" && !runner.IsRunning) continue;
+            else Request(action);
+        }
+    }
+
+    private static unsafe bool GameTextInputActive()
+    {
+        var ui = FFXIVClientStructs.FFXIV.Client.UI.UIModule.Instance();
+        if (ui == null) return true;
+        var atk = ui->GetRaptureAtkModule();
+        return atk == null || atk->IsTextInputActive();
     }
 
     private void Request(string action) => requests.Enqueue((action, action is "confirm-start" or "settings"
@@ -62,6 +89,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (disposed) return;
         var now = clock.Elapsed.TotalSeconds;
+        PollHotkeys();
         if (now - lastTick < 0.25) return;
         lastTick = now;
         try
@@ -105,6 +133,7 @@ public sealed class Plugin : IDalamudPlugin
                     case "pause": runner.RequestPause(); break;
                     case "pause-after": runner.TogglePauseAfterFate(); break;
                     case "resume": runner.Resume(world, now); break;
+                    case "toggle": if (runner.IsPaused) runner.Resume(world, now); else runner.RequestPause(); break;
                     case "check-deps": window.Dependencies = runtime.Dependencies(); window.DependenciesCheckedAt = DateTime.Now; break;
                 }
             }

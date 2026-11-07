@@ -70,6 +70,13 @@ internal sealed partial class MainWindow
         if (f != null) DrawFateProgress(f);
         else ImGui.TextDisabled(L.T("Aguardando FATEs elegíveis."));
 
+        // Optional live map (Map page → "Show the map in the compact panel").
+        if (config.CompactMap && World.LoggedIn && !World.Loading && World.Territory != 0)
+        {
+            ImGui.Spacing();
+            DrawZoneMap("###compactMapCanvas", new Vector2(full, 170 * scale), CompactMapRadius, false);
+        }
+
         // Session numbers.
         ImGui.Spacing();
         if (ImGui.BeginTable("compactStats", 3, ImGuiTableFlags.SizingStretchSame))

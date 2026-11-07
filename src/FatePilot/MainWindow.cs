@@ -22,7 +22,6 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     private bool open;
     public bool IsOpen => open;
     private string search = "";
-    private static readonly Vector4 Gold = new(0.87f, 0.72f, 0.46f, 1);
     private readonly Dalamud.Interface.Textures.ISharedImmediateTexture logo = Services.Textures.GetFromManifestResource(Assembly.GetExecutingAssembly(), "FatePilot.Assets.logo.png");
     private readonly Dalamud.Interface.Textures.ISharedImmediateTexture cat = Services.Textures.GetFromManifestResource(Assembly.GetExecutingAssembly(), "FatePilot.Assets.cat.png");
     public void Open() => open = true;
@@ -35,6 +34,8 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     public void Draw()
     {
+        theme = UiTheme.Find(config.Theme);
+        if (!open) capturingHotkey = null;
         SyncCompactMode();
         if (compact && runner.IsRunning) DrawCompactWindow();
         if (!open) return;
@@ -81,26 +82,27 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(9, 5) * scale);
         ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 5f * scale);
         ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 8f * scale);
-        ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(.055f, .065f, .085f, .98f));
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(.08f, .095f, .12f, 1));
+        var t = theme;
+        ImGui.PushStyleColor(ImGuiCol.WindowBg, t.Window);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, t.Child);
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(.91f, .91f, .89f, 1));
         ImGui.PushStyleColor(ImGuiCol.TextDisabled, new Vector4(.59f, .64f, .71f, 1));
-        ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(.21f, .25f, .30f, 1));
-        ImGui.PushStyleColor(ImGuiCol.FrameBg, new Vector4(.11f, .13f, .17f, 1));
-        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.16f, .19f, .24f, 1));
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(.40f, .32f, .20f, 1));
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(.50f, .39f, .23f, 1));
-        ImGui.PushStyleColor(ImGuiCol.CheckMark, Gold);
-        ImGui.PushStyleColor(ImGuiCol.SliderGrab, Gold);
-        ImGui.PushStyleColor(ImGuiCol.Header, new Vector4(.30f, .25f, .17f, 1));
-        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(.40f, .32f, .20f, 1));
-        ImGui.PushStyleColor(ImGuiCol.Tab, new Vector4(.10f, .12f, .16f, 1));
-        ImGui.PushStyleColor(ImGuiCol.TabHovered, new Vector4(.32f, .28f, .21f, 1));
-        ImGui.PushStyleColor(ImGuiCol.TabActive, new Vector4(.27f, .23f, .17f, 1));
-        ImGui.PushStyleColor(ImGuiCol.TitleBg, new Vector4(.055f, .065f, .085f, 1));
-        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, new Vector4(.09f, .11f, .14f, 1));
-        ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, new Vector4(.98f, .83f, .57f, 1));
-        ImGui.PushStyleColor(ImGuiCol.Separator, new Vector4(.21f, .25f, .30f, 1));
+        ImGui.PushStyleColor(ImGuiCol.Border, t.Border);
+        ImGui.PushStyleColor(ImGuiCol.FrameBg, t.Frame);
+        ImGui.PushStyleColor(ImGuiCol.Button, t.Button);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, t.ButtonHovered);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, t.ButtonActive);
+        ImGui.PushStyleColor(ImGuiCol.CheckMark, t.Accent);
+        ImGui.PushStyleColor(ImGuiCol.SliderGrab, t.Accent);
+        ImGui.PushStyleColor(ImGuiCol.Header, t.Header);
+        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, t.HeaderHovered);
+        ImGui.PushStyleColor(ImGuiCol.Tab, t.Tab);
+        ImGui.PushStyleColor(ImGuiCol.TabHovered, t.TabHovered);
+        ImGui.PushStyleColor(ImGuiCol.TabActive, t.TabActive);
+        ImGui.PushStyleColor(ImGuiCol.TitleBg, t.TitleBg);
+        ImGui.PushStyleColor(ImGuiCol.TitleBgActive, t.TitleActive);
+        ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, t.AccentBright);
+        ImGui.PushStyleColor(ImGuiCol.Separator, t.Border);
     }
 
     // "What happens next": the FATE being run (or the one that would be picked now),
@@ -189,6 +191,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     {
         if (runner.IsRunning) ImGui.TextWrapped(L.T("Edite livremente. As mudanças valem após o FATE ou a ação em andamento."));
         DrawProfiles();
+        DrawProfileSharing();
         DrawLevelRoute();
         BeginCard("selectedRoute"); DrawSelectedRoute(); EndCard();
         ImGui.SetNextItemWidth(-1);
@@ -511,7 +514,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         ImGui.Spacing();
         var supportWidth = ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Heart, "Buy my cat a treat");
         CenterNext(supportWidth);
-        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.37f, .29f, .17f, 1));
+        ImGui.PushStyleColor(ImGuiCol.Button, (Gold * .42f) with { W = 1 });
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Heart, "Buy my cat a treat"))
             Dalamud.Utility.Util.OpenLink("https://ko-fi.com/mokoena");
         ImGui.PopStyleColor();

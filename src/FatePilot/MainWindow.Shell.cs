@@ -9,7 +9,7 @@ namespace FatePilot;
 
 internal sealed partial class MainWindow
 {
-    private enum Page { Session, Route, Fates, Achievements, Jobs, Inventory, Supplies, Tracker, Diagnostics, About, Settings }
+    private enum Page { Session, Route, Fates, Map, Achievements, Jobs, Inventory, Supplies, Tracker, Diagnostics, About, Settings }
     private Page page;
     private bool startPrompt, openStartPopup;
     private static readonly Stack<(Vector2 Origin, float Width)> cards = new();
@@ -20,6 +20,7 @@ internal sealed partial class MainWindow
     private void DrawShell()
     {
         var scale = ImGuiHelpers.GlobalScale;
+        if (page != Page.Settings && capturingHotkey != null) EndCapture();
         ImGui.BeginChild("navigation", new Vector2(176 * scale, 0), false);
         CenterNext(58 * scale); DrawLogo(58 * scale);
         CenteredText("F A T E P I L O T", 170 * scale);
@@ -29,6 +30,7 @@ internal sealed partial class MainWindow
         NavItem(Page.Session, FontAwesomeIcon.Compass, L.T("Sessão"));
         NavItem(Page.Route, FontAwesomeIcon.Route, L.T("Rota"));
         NavItem(Page.Fates, FontAwesomeIcon.Flag, L.T("FATEs"));
+        NavItem(Page.Map, FontAwesomeIcon.MapMarkedAlt, L.T("Mapa"));
         NavItem(Page.Achievements, FontAwesomeIcon.Trophy, L.T("Conquistas"));
         NavSection(L.T("PERSONAGEM"));
         NavItem(Page.Jobs, FontAwesomeIcon.UserShield, L.T("Classes"));
@@ -73,6 +75,7 @@ internal sealed partial class MainWindow
             case Page.Session: PageTitle(L.T("Sessão"), L.T("Metas e acompanhamento da sua jornada.")); DrawSession(); break;
             case Page.Route: PageTitle(L.T("Rota"), L.T("Escolha os destinos na ordem em que deseja visitá-los.")); DrawRoute(); break;
             case Page.Fates: PageTitle(L.T("FATEs"), L.T("Eventos da zona, progresso e prioridades.")); DrawFates(); break;
+            case Page.Map: PageTitle(L.T("Mapa"), L.T("A zona ao vivo: FATEs, progresso, caminho e inimigos.")); DrawMap(); break;
             case Page.Achievements: PageTitle(L.T("Conquistas"), L.T("Conquistas de FATE, progresso e atalhos para a rota.")); DrawAchievements(); break;
             case Page.Inventory: PageTitle(L.T("Inventário"), L.T("Reparo, comida e limites da bolsa.")); DrawInventory(); break;
             case Page.Jobs: PageTitle(L.T("Classes"), L.T("Fila de classes por nível, com troca automática de gearset.")); DrawJobs(); break;
@@ -158,9 +161,9 @@ internal sealed partial class MainWindow
     // The one call-to-action per screen: gold fill, dark text. Caller pops 4 colors.
     private static void PushPrimaryButton()
     {
-        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(.62f, .49f, .28f, 1));
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(.74f, .59f, .35f, 1));
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(.84f, .68f, .42f, 1));
+        ImGui.PushStyleColor(ImGuiCol.Button, theme.Primary);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, theme.PrimaryHovered);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, theme.PrimaryActive);
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(.08f, .07f, .06f, 1));
     }
 
@@ -311,8 +314,10 @@ internal sealed partial class MainWindow
         { config.Language = Localization.Codes[language]; Localization.Apply(config.Language); config.Save(); }
         ImGui.TextWrapped(L.T("Auto usa o idioma do cliente. Português (Brasil) e espanhol são escolhas manuais."));
         EndCard();
+        DrawAppearanceSettings();
         DrawDependencySettings();
         DrawAlertSettings();
+        DrawHotkeySettings();
         BeginCard("supervisionSettings");
         ImGui.TextColored(Gold, L.T("Mantenha seu personagem sob supervisão"));
         ImGui.TextWrapped(L.T("O aviso aparece antes de cada sessão, inclusive ao usar /fatepilot start."));

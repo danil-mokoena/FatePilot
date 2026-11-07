@@ -221,7 +221,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             Instance = Optional(IntegrationIds.TravelGetCurrentInstance, 0), InstanceCount = Optional(IntegrationIds.TravelGetNumberOfInstances, 0),
             CanChangeInstance = Optional(IntegrationIds.TravelCanChangeInstance, false), TravelBusy = Optional(IntegrationIds.TravelIsBusy, false),
             NavReady = Optional(IntegrationIds.NavigationNavIsReady, false), NavBusy = session && nav.Busy, NavError = nav.Error,
-            Position = player.Position, NearbyAetheryte = nearestHub, Fates = fates, Enemies = enemies,
+            Position = player.Position, Rotation = player.Rotation, NearbyAetheryte = nearestHub, Fates = fates, Enemies = enemies,
             Objectives = objectives, OwnEventInteraction = interactionStatus == InteractionStatus.Owned,
             EventInteractionPending = interactionStatus == InteractionStatus.Waiting,
             EventInteractionError = interactionStatus == InteractionStatus.Foreign ? L.T("O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.") :

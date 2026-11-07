@@ -22,5 +22,10 @@ public sealed class Configuration : IPluginConfiguration
     public Dictionary<ushort, uint> FateZones { get; set; } = [];
     // Local per-zone farming history (0.7).
     public ZoneHistory History { get; set; } = new();
+    // 0.9: interface theme, map zoom, map in the compact panel and keyboard shortcuts.
+    public string Theme { get; set; } = "chocobo";
+    public float MapRadius { get; set; } = 250f;
+    public bool CompactMap { get; set; }
+    public List<HotkeyBinding> Hotkeys { get; set; } = [];
     public void Save() => Services.Plugin.SavePluginConfig(this);
 }
