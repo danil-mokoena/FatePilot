@@ -1,4 +1,6 @@
 {
+  "Lendo as conquistas e as zonas dos FATEs nos dados do jogo…": "ゲームデータからアチーブメントとFATEのエリアを読み込み中…",
+  "Zona não encontrada nos dados do jogo para este FATE.": "このFATEのエリアがゲームデータに見つかりません。",
   "Conquistas": "アチーブメント",
   "Conquistas de FATE, progresso e atalhos para a rota.": "FATEのアチーブメント、進捗、ルートへのショートカット。",
   "Chefes e FATEs específicos": "ボスと特定のFATE",
