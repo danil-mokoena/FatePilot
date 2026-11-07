@@ -192,7 +192,7 @@ internal sealed partial class GameRuntime
                 return;
             case RepairStage.Confirming:
                 // Only the prompt that appears right after our own Repair All click.
-                if (yesNo != null && yesNo->IsVisible && now - repairStepAt < 5)
+                if (yesNo != null && yesNo->IsVisible && repair != null && repair->AtkUnitBase.IsVisible && now - repairStepAt < 5)
                 { yesNo->FireCallbackInt(0); repairStage = RepairStage.Repairing; repairStepAt = now; }
                 else if (now - repairStepAt >= 5) { repairStage = RepairStage.Closing; repairStepAt = now; }
                 return;
