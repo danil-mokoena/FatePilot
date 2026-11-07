@@ -21,6 +21,7 @@ internal sealed unsafe class EventInteraction(Action<string> log)
     private readonly InteractionLease lease = new();
     private readonly LocalDialogueGuard localDialogue = new();
     private long lastAdvance;
+    private double interactionSentAt = double.NegativeInfinity;
     private InteractionStatus lastStatus;
     private string localEvidence = "not checked";
     private static double Now => Environment.TickCount64 / 1000d;
@@ -96,6 +97,7 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         localDialogue.Reset();
         var nativeFate = (FateContext*)fate.Address;
         lease.Begin(actor.Id, [0x801A0000u | actor.FateId, nativeFate->ArrayEventHandler.Id], Now);
+        interactionSentAt = Now;
         lastStatus = InteractionStatus.Waiting;
         lastAdvance = 0;
         log(L.T("Interação enviada ao NPC/objeto do FATE {0}; aguardando o contexto do diálogo.", actor.FateId));
@@ -169,7 +171,8 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         var speaker = talk ? TalkSpeaker() : null;
         var speakerMatches = DialogueSpeaker.Matches(expected, speaker);
         localEvidence = $"local bound={bound}; speakerAvailable={!string.IsNullOrWhiteSpace(speaker)}; speakerMatch={speakerMatches}; callbackPresent={receiver != 0}; talk={talk}; yesNo={yesNo}";
-        return localDialogue.Observe(globalsEmpty, bound, talk, speakerMatches, yesNo, receiver, Now);
+        return localDialogue.Observe(globalsEmpty, bound, talk, speakerMatches, yesNo, receiver, Now,
+            Now - interactionSentAt <= LocalDialogueGuard.ConfirmWindow);
     }
 
     private static string? TalkSpeaker()
@@ -229,5 +232,5 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         return addon != null && addon->IsVisible;
     }
 
-    public void Cancel() { owned = null; lease.Cancel(); localDialogue.Reset(); lastStatus = InteractionStatus.None; }
+    public void Cancel() { owned = null; lease.Cancel(); localDialogue.Reset(); lastStatus = InteractionStatus.None; interactionSentAt = double.NegativeInfinity; }
 }
