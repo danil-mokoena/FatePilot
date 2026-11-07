@@ -109,6 +109,7 @@ public sealed partial class Runner(IRuntime runtime)
             }
 
             if (State == RunState.Teleporting) { TickTeleport(w, now); return; }
+            if (State == RunState.Gateway) { TickGateway(w, now); return; }
             if (State == RunState.InstanceChange) { TickInstance(w, now); return; }
             if (w.Loading) { Stop(L.T("Transição de área não solicitada pelo FatePilot."), true); return; }
             if (w.Territory != expectedTerritory) { Stop(L.T("A zona mudou fora da rota do FatePilot."), true); return; }
@@ -375,9 +376,49 @@ public sealed partial class Runner(IRuntime runtime)
     {
         sawLoading |= w.Loading;
         if (now - since > 90) { Stop(L.T("Teleporte não confirmado em 90 segundos (gil, desbloqueio ou cancelamento)."), true); return; }
-        if (w.Loading || !w.LoggedIn || w.Casting || w.Occupied || w.TravelBusy || !sawLoading || w.Territory != teleportDestination!.TerritoryId) return;
+        if (w.Loading || !w.LoggedIn || w.Casting || w.Occupied || w.TravelBusy || !sawLoading || w.Territory != Gateways.ArrivalTerritory(teleportDestination!)) return;
         expectedTerritory = w.Territory;
         runtime.ConfirmTeleport();
+        // Zones without an aetheryte: we landed in the neighbouring city; continue through its aethernet shard.
+        if (!returning && Gateways.For(teleportDestination) is { } gate && w.Territory == gate.ViaTerritory && gate.Territory != w.Territory)
+        {
+            gatewayAttempts = 0;
+            Enter(RunState.Gateway, L.T("Seguindo pelo aethernet até {0}.", teleportDestination!.Name), now);
+            return;
+        }
+        Arrived(w, now);
+    }
+
+    private int gatewayAttempts;
+
+    private void TickGateway(World w, double now)
+    {
+        var gate = Gateways.For(teleportDestination)!;
+        if (now - since > 60)
+        { Stop(L.T("Não foi possível usar o aethernet para chegar a {0}. Sintonize o portão de aethernet e tente de novo.", teleportDestination!.Name), true); return; }
+        if (w.Loading || !w.LoggedIn || w.Occupied || w.Casting) return;
+        if (w.Territory == gate.Territory)
+        {
+            if (w.TravelBusy) return;
+            expectedTerritory = w.Territory;
+            Arrived(w, now);
+            return;
+        }
+        if (w.Territory != gate.ViaTerritory)
+        {
+            if (!w.TravelBusy) Stop(L.T("A viagem pelo aethernet terminou em uma zona inesperada."), true);
+            return;
+        }
+        // Ask again only if the travel module went idle without moving us (refused or interrupted).
+        if (!w.TravelBusy && gatewayAttempts < 3 && Throttle(now, 12))
+        {
+            gatewayAttempts++;
+            runtime.AethernetTeleport(gate.ShardId);
+        }
+    }
+
+    private void Arrived(World w, double now)
+    {
         if (returning)
         {
             runtime.End();
@@ -431,6 +472,13 @@ public sealed partial class Runner(IRuntime runtime)
         if (w.Territory != expectedTerritory) { Stop(L.T("Troca de instância terminou em uma zona inesperada."), true); return; }
         nextInstance = 0;
         Enter(RunState.Selecting, L.T("Instância confirmada; procurando FATEs."), now);
+    }
+
+    // User-requested skip of the current FATE (5-minute ignore, then pick the next one).
+    public void Skip(double now)
+    {
+        if (!IsRunning || Selected == null || State is RunState.Teleporting or RunState.Gateway or RunState.InstanceChange) return;
+        SkipOrFail(L.T("Pulado pelo usuário."), now);
     }
 
     private void SkipOrFail(string reason, double now)

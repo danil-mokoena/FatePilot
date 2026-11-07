@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace FatePilot.Core;
 
-public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending }
+public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending, Gateway }
 public enum EventState { Other, Preparing = 3, Running = 4, Ending = 5, Ended = 7, Failed = 8 }
 public enum FateKind { Unknown, Combat, Collection, Defense, Escort }
 public enum ObjectiveRole { Starter, Recipient, Escort, Pickup }
@@ -141,6 +141,7 @@ public interface IRuntime
     void Teleport(Destination destination);
     void ConfirmTeleport();
     void ChangeInstance(int instance);
+    void AethernetTeleport(uint shardId);
     void Log(string message);
     void Interact(ObjectiveActor actor);
     void AdvanceEventInteraction();
