@@ -312,6 +312,7 @@ internal sealed partial class MainWindow
         ImGui.TextWrapped(L.T("Auto usa o idioma do cliente. Português (Brasil) e espanhol são escolhas manuais."));
         EndCard();
         DrawDependencySettings();
+        DrawAlertSettings();
         BeginCard("supervisionSettings");
         ImGui.TextColored(Gold, L.T("Mantenha seu personagem sob supervisão"));
         ImGui.TextWrapped(L.T("O aviso aparece antes de cada sessão, inclusive ao usar /fatepilot start."));

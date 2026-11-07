@@ -34,9 +34,17 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = "/fatepilot | start | stop | pause | resume | status | recover",
         });
         Services.Framework.Update += Update;
+        Services.Chat.ChatMessage += OnChat;
         Services.Plugin.UiBuilder.Draw += window.Draw;
         Services.Plugin.UiBuilder.OpenMainUi += window.Open;
         Services.Plugin.UiBuilder.OpenConfigUi += window.Open;
+    }
+
+    // Only the fact that a tell arrived is used; sender and text are never read or stored.
+    private void OnChat(Dalamud.Game.Chat.IHandleableChatMessage message)
+    {
+        if (message.LogKind != Dalamud.Game.Text.XivChatType.TellIncoming || !runner.IsRunning || !config.Options.NotifyOnTell) return;
+        try { GameRuntime.Alert(config.Options, L.T("Você recebeu uma tell.")); } catch (Exception) { }
     }
 
     private void OnCommand(string command, string args)
@@ -130,6 +138,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         disposed = true;
         Services.Framework.Update -= Update;
+        Services.Chat.ChatMessage -= OnChat;
         Services.Plugin.UiBuilder.Draw -= window.Draw;
         Services.Plugin.UiBuilder.OpenMainUi -= window.Open;
         Services.Plugin.UiBuilder.OpenConfigUi -= window.Open;

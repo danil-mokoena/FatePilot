@@ -69,6 +69,15 @@ internal sealed partial class GameRuntime
         return list;
     }
 
+    // ----- Notifications: one of the 16 chat sound effects and a local chat line (never sent). -----
+    public void Notify(NotifyKind kind, string message) => Alert(upkeepOptions, message);
+
+    internal static void Alert(RunOptions options, string message)
+    {
+        if (options.NotifyChat) Services.Chat.Print("[FatePilot] " + message);
+        if (options.NotifySound) FFXIVClientStructs.FFXIV.Client.UI.UIGlobals.PlayChatSoundEffect((uint)Math.Clamp(options.NotifySoundEffect, 1, 16));
+    }
+
     // ----- Food -----
     public static unsafe List<FoodChoice> FoodChoices()
     {
