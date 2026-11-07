@@ -26,7 +26,7 @@ Test("Starting requires fresh confirmation and cancellation prevents a delayed s
     Assert(!gate.Confirm(true) && !gate.Pending);
     Assert(gate.Request(false) && gate.Confirm(false));
 });
-RunOptions Options() => new() { ReturnDestination = home, ReturnAfterFates = 1, UseMount = false, SummonChocobo = false, IdleSeconds = 10 };
+RunOptions Options() => new() { ReturnDestination = home, ReturnAfterFates = 1, UseMount = false, SummonChocobo = false, IdleSeconds = 10, AutoRetry = false };
 (Runner Runner, Fake Runtime) Started(World? w = null, RunOptions? o = null)
 {
     var fake = new Fake(); var runner = new Runner(fake); runner.Start(o ?? Options(), w ?? world, 0);
@@ -607,6 +607,40 @@ Test("With nothing eligible, the runner waits at the zone's usual FATE spot", ()
     r.Start(o, idle, 0); r.Tick(idle,1); r.Tick(idle,2);
     Assert(fake.Moves==1 && Vector3.Distance(fake.LastMove,new(500,10,500))<1);
     r.Tick(idle,3); Assert(fake.Moves==1, "Only once per wait");
+});
+Test("A recoverable interruption releases control, waits and resumes, within the retry limit", () =>
+{
+    var o=Options(); o.AutoRetry=true; o.MaxRetries=1; o.ReturnAfterFates=0;
+    var (r,f)=Started(world,o); r.Tick(world,1);
+    r.Tick(world with { Territory=1001 },2);
+    Assert(r.State==RunState.Retrying && f.Suspends==1 && f.Notifications.Any(n=>n.Kind==NotifyKind.Problem));
+    r.Tick(world with { Territory=1001, DialogueOpen=true },15); Assert(r.State==RunState.Retrying, "Waits for the game to settle");
+    r.Tick(world with { Territory=1001 },16);
+    Assert(r.State==RunState.Selecting && f.Resumes==1 && r.IsRunning);
+    r.Tick(world with { Territory=1001 },17); Assert(r.IsRunning, "The new zone is adopted");
+    r.Tick(world with { Territory=1002 },30);
+    Assert(!r.IsRunning, "Second interruption beyond the limit stops");
+});
+Test("Death and duty entry never retry", () =>
+{
+    var o=Options(); o.AutoRetry=true;
+    var (r,_)=Started(world,o); r.Tick(world with { Dead=true },1); Assert(!r.IsRunning);
+    (r,_)=Started(world,o); r.Tick(world with { Restricted=true },1); Assert(!r.IsRunning);
+});
+Test("Notifications: stop, goal and a prioritized FATE appearing; none for a user stop", () =>
+{
+    var o=Options(); o.PriorityFates=[1];
+    var (r,f)=Started(world with { Fates=[] },o);
+    r.Tick(world,1);
+    Assert(f.Notifications.Any(n=>n.Kind==NotifyKind.PriorityFate));
+    var inside=Engage(r);
+    r.Tick(inside with { Fates=[fate with { Progress=100 }] },7); r.Tick(inside with { InCombat=false, Fates=[] },8);
+    Assert(f.Notifications.Any(n=>n.Kind==NotifyKind.Goal));
+    r.Stop(); Assert(!f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped), "User stop is not announced");
+    (r,f)=Started(world,o); r.Tick(world with { Dead=true },1);
+    Assert(f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped));
+    o.NotifyOnStop=false; (r,f)=Started(world,o); r.Tick(world with { Dead=true },1);
+    Assert(!f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped), "Respects the setting");
 });
 Test("Session summary is kept after stopping", () =>
 {
@@ -1234,6 +1268,8 @@ sealed class Fake : IRuntime
     public bool EquipGearset(int index){ Gearsets.Add(index); return true; }
     public bool UseFood(uint itemId,bool hq){ FoodUses++; return !RejectFood; }
     public bool StartRepair(){ RepairStarts++; return true; }
+    public readonly List<(NotifyKind Kind, string Message)> Notifications=[];
+    public void Notify(NotifyKind kind, string message)=>Notifications.Add((kind,message));
     public readonly List<uint> Shards=[];
     public void AethernetTeleport(uint shardId)=>Shards.Add(shardId);
     public void Log(string message) { }
