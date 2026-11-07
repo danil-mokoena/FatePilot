@@ -144,6 +144,9 @@ internal sealed unsafe class GreensShop
         if (observedShop)
         {
             if (EventInteraction.DialogueOpen) return Reject();
+            // Our shop is fully closed: forget it, so later prompts (FATE Yes/No, a discard
+            // confirmation) are never mistaken for a foreign shop on the next restock.
+            Reset();
             return GreensShopState.Closed;
         }
         if (Now - openedAt > 20)

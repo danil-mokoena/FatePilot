@@ -161,7 +161,18 @@ internal sealed partial class MainWindow
     {
         var o = config.Options;
         if (a.Complete) return;
-        if (a.FateIds.Length > 0)
+        if (a.FateIds.Length > 0 && o.ExcludeGroupBosses && a.FateIds.Any(FateRules.IsGroupBoss))
+        {
+            // Group bosses are skipped (and stop the session) while that option is on: say so
+            // instead of offering a priority that would never be used.
+            ImGui.BeginDisabled();
+            ImGuiComponents.IconButton(FontAwesomeIcon.ExclamationTriangle);
+            ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(L.T("Chefe de grupo: o FatePilot ignora este FATE enquanto “Ignorar chefes de grupo conhecidos” estiver ativo na Sessão."));
+            ImGui.SameLine();
+        }
+        else if (a.FateIds.Length > 0)
         {
             var prioritized = a.FateIds.All(o.PriorityFates.Contains);
             if (prioritized) PushPrimaryButton();

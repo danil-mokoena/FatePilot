@@ -83,12 +83,20 @@ internal sealed unsafe class AchievementCatalog
         return result;
     }
 
+    private double lastBuild = double.NegativeInfinity;
+
     public void EnsureBuilt()
     {
         var language = Services.Data.Language.ToString();
-        if (builtFor == language && (rows.Count > 0 || Building)) return;
+        // A build that failed (or found nothing) is retried at most every 30 seconds, never per frame.
+        if (builtFor == language && (rows.Count > 0 || Building || Now - lastBuild < 30)) return;
         builtFor = language;
-        building = Task.Run(Build);
+        lastBuild = Now;
+        building = Task.Run(() =>
+        {
+            try { Build(); }
+            catch (Exception) { Services.Log.Warning("FatePilot could not read the achievement data; retrying later."); }
+        });
     }
 
     private void Build()

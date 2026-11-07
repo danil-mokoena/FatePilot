@@ -26,6 +26,7 @@ internal sealed partial class GameRuntime
         List<string> errors = [];
         void Attempt(Action action) { try { action(); } catch (Exception ex) { errors.Add(ex.Message); } }
         Attempt(greensShop.Close);
+        greensShop.Reset();
         Attempt(nav.Stop);
         Attempt(combat.End);
         session = false;
