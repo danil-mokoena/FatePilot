@@ -440,6 +440,103 @@ Test("Gateway that never leaves the city stops with a clear reason", () =>
     for(var t=16;t<=80;t+=4) r.Tick(idle with { Territory=478 },t);
     Assert(!r.IsRunning && f.Shards.Count is >= 1 and <= 3);
 });
+Test("Pause releases control, freezes the session clock and resume continues with the same counters", () =>
+{
+    var (r,f)=Started(); r.Tick(world,1); Assert(r.Selected!=null);
+    r.RequestPause(); r.Tick(world,2);
+    Assert(r.IsPaused && r.IsRunning && r.Selected==null && f.Suspends==1);
+    var frozen=r.ElapsedSeconds;
+    r.Tick(world with { Territory=1001, Job=19 },100);
+    Assert(r.IsPaused && r.ElapsedSeconds==frozen, "Zone or job changes while paused do not stop the session");
+    r.Resume(world with { InCombat=true },101); Assert(r.IsPaused, "Resume waits for out of combat");
+    r.Resume(world with { Territory=1001, Job=19 },102);
+    Assert(r.State==RunState.Selecting && f.Resumes==1);
+    r.Tick(world with { Territory=1001, Job=19 },103);
+    Assert(r.IsRunning, "The new zone and job are adopted on resume");
+    Assert(r.ElapsedSeconds < 10, "Paused time is not counted");
+});
+Test("Pause after this FATE waits for the FATE to end", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnDestination=null;
+    var (r,f)=Started(o:o); var inside=Engage(r);
+    r.TogglePauseAfterFate(); Assert(r.PauseAfterFate);
+    r.Tick(inside,7); Assert(!r.IsPaused, "Keeps fighting");
+    r.Tick(inside with { Fates=[fate with { Progress=100 }] },8);
+    r.Tick(inside with { InCombat=false, Fates=[] },9);
+    Assert(r.IsPaused && r.Completed==1 && f.Suspends==1);
+});
+Test("Bag space and durability limits request a return", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnWhenBagSlotsBelow=5;
+    var (r,_)=Started(world,o); r.Tick(world with { FreeBagSlots=3 },1);
+    Assert(r.PendingReturnGoal==ReturnGoal.BagFull);
+    o=Options(); o.ReturnAfterFates=0; o.ReturnWhenDurabilityBelow=20;
+    (r,_)=Started(world,o); r.Tick(world with { MinDurability=10 },1);
+    Assert(r.PendingReturnGoal==ReturnGoal.Durability);
+    Assert(SessionGoals.Evaluate(o,0,0,0,0,0,-1,-1)==ReturnGoal.None, "Unknown values never trigger");
+});
+Test("Self-repair runs between FATEs and is confirmed by durability", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnWhenDurabilityBelow=20; o.SelfRepair=true; o.RepairBelowPercent=30;
+    var worn=world with { Fates=[], MinDurability=10, CanSelfRepair=true };
+    var (r,f)=Started(worn,o); r.Tick(worn,1);
+    Assert(r.State==RunState.Repairing && f.RepairStarts==1 && r.PendingReturnGoal==ReturnGoal.None, "Repair replaces the durability return");
+    r.Tick(worn with { RepairBusy=true },2);
+    r.Tick(worn with { MinDurability=100 },3);
+    Assert(r.State==RunState.Selecting && r.Repairs==1);
+});
+Test("Failed repair disables it and the durability limit then returns", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnWhenDurabilityBelow=20; o.SelfRepair=true;
+    var worn=world with { Fates=[], MinDurability=10, CanSelfRepair=true };
+    var (r,f)=Started(worn,o); r.Tick(worn,1); r.Tick(worn,2);
+    Assert(r.Repairs==0 && r.State==RunState.Selecting);
+    r.Tick(worn,3);
+    Assert(f.RepairStarts==1 && r.PendingReturnGoal==ReturnGoal.Durability);
+});
+Test("Food is eaten when Well Fed is low and confirmed by the new timer", () =>
+{
+    var o=Options(); o.UseFood=true; o.FoodItemId=4650; o.FoodRefreshMinutes=5;
+    var hungry=world with { Fates=[], FoodSecondsLeft=60, FoodCount=3, CanUseFood=true };
+    var (r,f)=Started(hungry,o); r.Tick(hungry,1);
+    Assert(f.FoodUses==1);
+    r.Tick(hungry with { FoodSecondsLeft=1800 },2);
+    Assert(r.FoodUsed==1);
+    r.Tick(hungry with { FoodSecondsLeft=1800 },70); Assert(f.FoodUses==1, "Not eaten again while fed");
+});
+Test("Job queue equips the next gearset when the target level is reached", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.UseJobQueue=true;
+    o.JobQueue=[new JobGoal{Gearset=3,Job=22,Name="Dragoon",TargetLevel=90}, new JobGoal{Gearset=5,Job=19,Name="Paladin",TargetLevel=90}];
+    var idle=world with { Fates=[] };
+    var (r,f)=Started(idle,o); r.Tick(idle,1);
+    Assert(r.State==RunState.SwitchingJob && f.Gearsets.Single()==5 && f.Suspends==1);
+    r.Tick(idle,2); Assert(r.IsRunning, "Waiting for the job change is not an unexpected change");
+    r.Tick(idle with { Job=19, Level=80 },3);
+    Assert(r.State==RunState.Selecting && f.Resumes==1 && r.JobSwitches==1);
+    r.Tick(idle with { Job=19, Level=90 },20);
+    Assert(r.PendingReturnGoal==ReturnGoal.JobQueueDone);
+});
+Test("Gemstone balance return goes to the chosen trader city; other goals use the return city", () =>
+{
+    var tuliyollal=new Destination(1185,216,"Tuliyollal");
+    var o=Options(); o.ReturnAfterFates=0; o.AvoidGemstoneCap=true; o.GemstoneCapReserve=100; o.GemstoneDestination=tuliyollal;
+    var rich=world with { Fates=[], Gemstones=1450, GemstoneCap=1500 };
+    var (r,f)=Started(world with { Gemstones=1000, GemstoneCap=1500 },o); r.Tick(rich,1);
+    Assert(r.PendingReturnGoal==ReturnGoal.CurrencyCap && f.Teleports.Single()==tuliyollal);
+    o=Options(); o.GemstoneDestination=tuliyollal;
+    (r,f)=Started(o:o); var inside=Engage(r);
+    r.Tick(inside with { Fates=[fate with { Progress=100 }] },7); r.Tick(inside with { InCombat=false, Fates=[] },8);
+    Assert(r.PendingReturnGoal==ReturnGoal.Fates && f.Teleports.Single()==home);
+    Assert(GemstoneTraders.Has(tuliyollal) && !GemstoneTraders.Has(home));
+});
+Test("Session summary is kept after stopping", () =>
+{
+    var (r,_)=Started(); var inside=Engage(r);
+    r.Tick(inside with { Fates=[fate with { Progress=100 }] },7);
+    r.Stop();
+    Assert(r.LastSummary is { Completed: 1 } s && s.Reason.Length > 0);
+});
 Test("Skip ignores the current FATE and selects again", () =>
 {
     var (r,f)=Started(); r.Tick(world,1); Assert(r.Selected?.Id==1);
@@ -1051,6 +1148,14 @@ sealed class Fake : IRuntime
     public void Teleport(Destination d)=>Teleports.Add(d);
     public void ConfirmTeleport()=>Confirmations++;
     public void ChangeInstance(int instance)=>Instances.Add(instance);
+    public int Suspends, Resumes, FoodUses, RepairStarts;
+    public readonly List<int> Gearsets=[];
+    public bool RejectFood;
+    public void Suspend()=>Suspends++;
+    public void ResumeSession()=>Resumes++;
+    public bool EquipGearset(int index){ Gearsets.Add(index); return true; }
+    public bool UseFood(uint itemId,bool hq){ FoodUses++; return !RejectFood; }
+    public bool StartRepair(){ RepairStarts++; return true; }
     public readonly List<uint> Shards=[];
     public void AethernetTeleport(uint shardId)=>Shards.Add(shardId);
     public void Log(string message) { }

@@ -24,7 +24,8 @@ internal static class PrivacyAudit
             if (source.Contains("OpenLink("))
                 Require(Regex.Matches(source, "OpenLink\\(").Count == 1 &&
                     ((file == "MainWindow.cs" && source.Contains("if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Heart, \"Buy my cat a treat\"))\n            Dalamud.Utility.Util.OpenLink(\"https://ko-fi.com/mokoena\");")) ||
-                     (file == "MainWindow.Tracker.cs" && source.Contains("var link = FaloopLink.ForWorld(current);") && source.Contains("if (ImGui.Button(L.T(\"Abrir Faloop no navegador\")))\n            Dalamud.Utility.Util.OpenLink(link);"))), "Browser must be opened only by a reviewed fixed-origin button");
+                     (file == "MainWindow.Tracker.cs" && source.Contains("var link = FaloopLink.ForWorld(current);") && source.Contains("var openLink = ImGuiComponents.IconButtonWithText(FontAwesomeIcon.ExternalLinkAlt, L.T(\"Abrir Faloop no navegador\"));")
+                        && source.Contains("if (openLink) Dalamud.Utility.Util.OpenLink(link);"))), "Browser must be opened only by a reviewed fixed-origin button");
             foreach (Match call in Regex.Matches(source, @"File\.(WriteAllText|ReadAllText|Delete)\(([^,)]+)"))
                 Require(Path.GetFileName(path) == "Combat.cs" && call.Groups[2].Value == "RecoveryPath", "Unreviewed file access: " + path);
         }
