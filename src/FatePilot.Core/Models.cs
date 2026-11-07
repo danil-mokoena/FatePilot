@@ -171,6 +171,8 @@ public sealed record World
     public int InstanceCount { get; init; }
     public bool CanChangeInstance { get; init; }
     public Vector3 Position { get; init; }
+    // Facing, in radians (0 = south / +Z), used only to draw the player arrow on the map.
+    public float Rotation { get; init; }
     public Vector3? NearbyAetheryte { get; init; }
     public bool TravelBusy { get; init; }
     public bool NavReady { get; init; }
