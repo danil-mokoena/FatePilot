@@ -9,7 +9,7 @@ internal sealed partial class MainWindow
     private void DrawGreensSettings()
     {
         BeginCard("chocoboCompanion");
-        IconText(ItemIcon(GreensRestock.ItemId), L.T("Companheiro chocobo"));
+        IconText(ChocoboIcon, L.T("Companheiro chocobo"));
         var summon = config.Options.SummonChocobo;
         if (ImGui.Checkbox(L.T("Invocar o chocobo automaticamente"), ref summon))
         { config.Options.SummonChocobo = summon; SaveSettings(); }
@@ -27,7 +27,7 @@ internal sealed partial class MainWindow
         if (ImGui.Checkbox(L.T("Comprar Gysahl Greens automaticamente"), ref enabled)) { o.RestockGreens = enabled; SaveSettings(); }
         Help(L.T("Ao atingir o mínimo, termina o FATE, compra em Limsa Lominsa e retorna à zona da rota. Requer o aetheryte desbloqueado."));
         var scale = ImGuiHelpers.GlobalScale;
-        if (ImGui.BeginTable("stock", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH))
+        if (ImGui.BeginTable("stock", 4, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH, new System.Numerics.Vector2(CardWidth(), 0)))
         {
             ImGui.TableSetupColumn(L.T("Item"), ImGuiTableColumnFlags.WidthStretch);
             ImGui.TableSetupColumn(L.T("Na bolsa"), ImGuiTableColumnFlags.WidthFixed, 70 * scale);
@@ -52,7 +52,7 @@ internal sealed partial class MainWindow
         if (World.GreensInventory.Ready)
         {
             ImGui.PushStyleColor(ImGuiCol.PlotHistogram, Gold);
-            ImGui.ProgressBar(Math.Clamp((float)World.GreensInventory.Count / Math.Max(1, o.GreensTarget), 0, 1), new(-1, 6 * scale), "");
+            ImGui.ProgressBar(Math.Clamp((float)World.GreensInventory.Count / Math.Max(1, o.GreensTarget), 0, 1), new(CardWidth(), 6 * scale), "");
             ImGui.PopStyleColor();
             ImGui.TextDisabled(L.T("{0} / {1} no estoque", World.GreensInventory.Count, o.GreensTarget));
         }

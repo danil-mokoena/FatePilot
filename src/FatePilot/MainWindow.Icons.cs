@@ -17,6 +17,18 @@ internal sealed partial class MainWindow
         return row?.Icon is > 0 ? row.Value.Icon : row?.MapIcon ?? 0;
     }
 
+    // Company Chocobo mount (Mount row 1) icon, read from the client's own data.
+    private static uint ChocoboIcon => (uint)(Services.Data.GetExcelSheet<Mount>().GetRowOrDefault(1)?.Icon ?? 0);
+
+    // Real width of an icon-only button: glyph width in the icon font plus frame padding.
+    private static float IconButtonWidth(FontAwesomeIcon icon)
+    {
+        ImGui.PushFont(UiBuilder.IconFont);
+        var glyph = ImGui.CalcTextSize(icon.ToIconString()).X;
+        ImGui.PopFont();
+        return glyph + ImGui.GetStyle().FramePadding.X * 2;
+    }
+
     private static void GameIcon(uint iconId, float size = 24)
     {
         var pixels = size * ImGuiHelpers.GlobalScale;

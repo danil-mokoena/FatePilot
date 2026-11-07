@@ -35,6 +35,8 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     public void Draw()
     {
+        SyncCompactMode();
+        if (compact && runner.IsRunning) DrawCompactWindow();
         if (!open) return;
         var scale = ImGuiHelpers.GlobalScale;
         ImGui.SetNextWindowSize(new Vector2(1040, 740) * scale, ImGuiCond.FirstUseEver);
@@ -45,6 +47,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             if (ImGui.Begin("FatePilot###FatePilotMain", ref open, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) DrawShell();
             ImGui.End();
             if (!open && startPrompt) { CancelStart(); request("cancel-start"); }
+            if (!open && runner.IsRunning) compact = true; // closing the full window mid-session falls back to the panel
         }
         finally { ImGui.PopStyleColor(20); ImGui.PopStyleVar(5); }
     }
@@ -227,9 +230,10 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             ImGui.SameLine();
             ImGui.AlignTextToFramePadding();
             ImGui.TextUnformatted(zones.FirstOrDefault(z => z.TerritoryId == d.TerritoryId)?.Name ?? d.Name);
-            var buttons = ImGui.GetFrameHeight() * 3 + ImGui.GetStyle().ItemSpacing.X * 2;
+            var buttons = IconButtonWidth(FontAwesomeIcon.ChevronUp) + IconButtonWidth(FontAwesomeIcon.ChevronDown)
+                + IconButtonWidth(FontAwesomeIcon.TrashAlt) + ImGui.GetStyle().ItemSpacing.X * 2;
             ImGui.SameLine();
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, ImGui.GetContentRegionAvail().X - buttons));
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0, CardWidth() - buttons));
             ImGui.BeginDisabled(i == 0);
             if (ImGuiComponents.IconButton(FontAwesomeIcon.ChevronUp)) { (config.Options.Route[i], config.Options.Route[i - 1]) = (config.Options.Route[i - 1], d); SaveSettings(); }
             ImGui.EndDisabled();
@@ -244,7 +248,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
             if (hubs.Length > 1)
             {
                 GameIcon(AetheryteIcon); ImGui.SameLine();
-                ImGui.SetNextItemWidth(-1);
+                ImGui.SetNextItemWidth(CardWidth());
                 if (ImGui.BeginCombo("###hub", d.Name))
                 {
                     foreach (var hub in hubs)
@@ -298,7 +302,15 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         draw.AddRectFilled(badgePosition, badgePosition + new Vector2(22 * scale), selected ? ImGui.ColorConvertFloat4ToU32(Gold) : 0xCC201B16, 4 * scale);
         draw.AddText(badgePosition + (new Vector2(22 * scale) - ImGui.CalcTextSize(badge)) / 2, selected ? 0xFF141414u : 0xFFFFFFFFu, badge);
         if (hovered)
-            ImGui.SetTooltip(zone.Name + "\n" + (destination?.Name ?? L.T("Sem aetheryte desbloqueado nesta zona. A viagem automática exige um destino de teleporte.")));
+        {
+            var gate = Gateways.ForZone(zone.TerritoryId);
+            var via = gate == null ? null : Services.Data.GetExcelSheet<Lumina.Excel.Sheets.Aetheryte>().GetRowOrDefault(gate.ViaAetheryteId)?.PlaceName.Value.Name.ExtractText();
+            var line = gate != null && via != null
+                ? (destination != null ? L.T("Sem aetheryte nesta zona: teleporta para {0} e entra pelo aethernet.", via)
+                                       : L.T("Desbloqueie o aetheryte de {0} para usar esta zona.", via))
+                : destination?.Name ?? L.T("Sem aetheryte desbloqueado nesta zona. A viagem automática exige um destino de teleporte.");
+            ImGui.SetTooltip(zone.Name + "\n" + line);
+        }
         ImGui.EndDisabled();
         ImGui.PopID();
     }
@@ -334,7 +346,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     {
         var scale = ImGuiHelpers.GlobalScale;
         var wide = ImGui.GetContentRegionAvail().X >= 620 * scale;
-        if (!ImGui.BeginTable("fateRows", wide ? 4 : 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg)) return;
+        if (!ImGui.BeginTable("fateRows", wide ? 4 : 3, ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg, new Vector2(CardWidth(), 0))) return;
         ImGui.TableSetupColumn("enabled", ImGuiTableColumnFlags.WidthFixed, 24 * scale);
         ImGui.TableSetupColumn("icon", ImGuiTableColumnFlags.WidthFixed, 36 * scale);
         ImGui.TableSetupColumn("event", ImGuiTableColumnFlags.WidthStretch);
@@ -367,7 +379,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
                 : ((string, Vector4)?)null;
             if (reason is { } chip) { ImGui.SameLine(); Chip(chip.Item1, chip.Item2); }
             if (wide) ImGui.TableNextColumn();
-            DrawFateProgress(f);
+            DrawFateProgress(f, inTable: true);
             ImGui.PopID();
         }
         ImGui.EndTable();
@@ -378,7 +390,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         DrawGreensSettings();
         BeginCard("teleportCosts");
         CardTitle(FontAwesomeIcon.Coins, L.T("Gastos de viagem"));
-        if (ImGui.BeginTable("travelStats", 3, ImGuiTableFlags.SizingStretchSame))
+        if (ImGui.BeginTable("travelStats", 3, ImGuiTableFlags.SizingStretchSame, new Vector2(CardWidth(), 0)))
         {
             Stat("tickets", L.T("Tickets na bolsa"), TicketCount.ToString("N0"), ItemIcon(7569));
             Stat("usedTickets", L.T("Tickets consumidos"), runtime.UsedTickets.ToString("N0"), ItemIcon(7569));
@@ -403,18 +415,43 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     }
 
     public int TicketCount { get; set; }
+    public DateTime? DependenciesCheckedAt { get; set; }
 
-    private void DrawDiagnostics()
+    // Green check / red cross per required integration.
+    private void DrawDependencyList()
     {
-        BeginCard("integrations");
-        CardTitle(FontAwesomeIcon.Plug, L.T("Integrações"));
+        if (Dependencies.Count == 0) { ImGui.TextDisabled(L.T("Verificando…")); return; }
         foreach (var (name, available) in Dependencies)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, available ? Success : Danger);
             DrawSymbol(available ? FontAwesomeIcon.CheckCircle : FontAwesomeIcon.TimesCircle);
             ImGui.PopStyleColor();
             ImGui.SameLine(); ImGui.TextUnformatted(name);
+            ImGui.SameLine(); ImGui.TextDisabled(available ? L.T("pronto") : L.T("ausente ou desatualizado"));
         }
+    }
+
+    private void DrawDependencySettings()
+    {
+        BeginCard("dependencySettings");
+        CardTitle(FontAwesomeIcon.Plug, L.T("Dependências"));
+        ImGui.TextWrapped(L.T("O FatePilot precisa destes plugins instalados e ativos. Verde: pronto. Vermelho: ausente ou com versão incompatível; instale ou atualize pelo /xlplugins."));
+        ImGui.Spacing();
+        DrawDependencyList();
+        ImGui.Spacing();
+        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.SyncAlt, L.T("Verificar novamente"))) request("check-deps");
+        var all = Dependencies.Count > 0 && Dependencies.All(d => d.Available);
+        ImGui.SameLine();
+        if (Dependencies.Count > 0) Chip(all ? L.T("Tudo pronto") : L.T("Falta algo"), all ? Success : Danger);
+        if (DependenciesCheckedAt is { } at) { ImGui.SameLine(); ImGui.TextDisabled(L.T("Verificado às {0}", at.ToString("HH:mm:ss"))); }
+        EndCard();
+    }
+
+    private void DrawDiagnostics()
+    {
+        BeginCard("integrations");
+        CardTitle(FontAwesomeIcon.Plug, L.T("Integrações"));
+        DrawDependencyList();
         EndCard();
         if (ImGui.SmallButton(L.T("Copiar diagnóstico")))
             ImGui.SetClipboardText("FatePilot " + Version + " / Dalamud API 15\n" + string.Join("\n", Dependencies.Select(d => $"{d.Name}: {d.Available}")) + "\n" + string.Join("\n", Messages));

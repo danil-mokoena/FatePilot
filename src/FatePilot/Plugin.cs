@@ -89,13 +89,15 @@ public sealed class Plugin : IDalamudPlugin
                         break;
                     case "status": Services.Chat.Print("FatePilot: " + runner.Status); break;
                     case "recover": if (!runner.IsRunning) runtime.Recover(); break;
+                    case "skip": runner.Skip(now); break;
+                    case "check-deps": window.Dependencies = runtime.Dependencies(); window.DependenciesCheckedAt = DateTime.Now; break;
                 }
             }
             var oldState = runner.State;
             runtime.ValidateControl();
             runner.Tick(world, now);
             runtime.Update(world);
-            if (oldState == RunState.InstanceChange && runner.State == RunState.Selecting) runtime.AcknowledgeTravelComplete();
+            if ((oldState == RunState.InstanceChange || oldState == RunState.Gateway) && runner.State != oldState) runtime.AcknowledgeTravelComplete();
             window.World = world;
             window.Messages = runtime.Messages;
             window.TicketCount = runtime.TicketCount;

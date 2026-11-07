@@ -161,19 +161,29 @@ internal sealed partial class MainWindow
         ImGui.Spacing();
     }
 
+    // Inner spacing of every card, on all four sides.
+    private const float CardPadding = 14f;
+
+    // Width left for content inside the current card: stops tables, bars and
+    // stretched fields at the card's right padding instead of its border.
+    private static float CardWidth() =>
+        Math.Max(1, ImGui.GetContentRegionAvail().X - (cards.Count > 0 ? CardPadding * ImGuiHelpers.GlobalScale : 0));
+
     private static void BeginCard(string id)
     {
         var width = ImGui.GetContentRegionAvail().X;
+        var pad = CardPadding * ImGuiHelpers.GlobalScale;
         cards.Push((ImGui.GetCursorScreenPos(), width));
         ImGui.PushID(id); ImGui.BeginGroup();
-        ImGui.Dummy(new Vector2(width, 3 * ImGuiHelpers.GlobalScale));
-        ImGui.Indent(12 * ImGuiHelpers.GlobalScale); ImGui.BeginGroup();
-        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - 12 * ImGuiHelpers.GlobalScale);
+        ImGui.Dummy(new Vector2(width, pad - ImGui.GetStyle().ItemSpacing.Y));
+        ImGui.Indent(pad); ImGui.BeginGroup();
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - pad);
     }
     private static void EndCard()
     {
-        ImGui.PopTextWrapPos(); ImGui.EndGroup(); ImGui.Unindent(12 * ImGuiHelpers.GlobalScale);
-        ImGui.Dummy(new Vector2(0, 3 * ImGuiHelpers.GlobalScale)); ImGui.EndGroup();
+        var pad = CardPadding * ImGuiHelpers.GlobalScale;
+        ImGui.PopTextWrapPos(); ImGui.EndGroup(); ImGui.Unindent(pad);
+        ImGui.Dummy(new Vector2(0, pad - ImGui.GetStyle().ItemSpacing.Y)); ImGui.EndGroup();
         var card = cards.Pop();
         ImGui.GetWindowDrawList().AddRect(card.Origin, new Vector2(card.Origin.X + card.Width, ImGui.GetItemRectMax().Y),
             ImGui.GetColorU32(ImGuiCol.Border), 8 * ImGuiHelpers.GlobalScale);
@@ -183,11 +193,12 @@ internal sealed partial class MainWindow
     private void DrawStatusHeader()
     {
         BeginCard("sessionStatus");
-        if (ImGui.BeginTable("statusControls", 2, ImGuiTableFlags.SizingStretchProp))
+        if (ImGui.BeginTable("statusControls", 2, ImGuiTableFlags.SizingStretchProp, new Vector2(CardWidth(), 0)))
         {
             ImGui.TableSetupColumn("state", ImGuiTableColumnFlags.WidthStretch);
             var controlsWidth = ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Play, L.T("Iniciar"))
-                + ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Stop, L.T("Parar")) + ImGui.GetStyle().ItemSpacing.X;
+                + ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Stop, L.T("Parar")) + ImGui.GetStyle().ItemSpacing.X
+                + (runner.IsRunning ? IconButtonWidth(FontAwesomeIcon.CompressAlt) + ImGui.GetStyle().ItemSpacing.X : 0);
             ImGui.TableSetupColumn("controls", ImGuiTableColumnFlags.WidthFixed, controlsWidth);
             ImGui.TableNextColumn();
             StatusDot(Error != null ? Danger : runner.IsRunning ? Success : Muted, runner.IsRunning && Error == null);
@@ -207,6 +218,12 @@ internal sealed partial class MainWindow
             ImGui.BeginDisabled(!runner.IsRunning && !startPrompt);
             if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Stop, L.T("Parar") + "###stop")) request("stop");
             ImGui.EndDisabled();
+            if (runner.IsRunning)
+            {
+                ImGui.SameLine();
+                if (ImGuiComponents.IconButton(FontAwesomeIcon.CompressAlt)) Minimize();
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Minimizar para o painel compacto"));
+            }
             ImGui.EndTable();
         }
         if (Error != null) { ImGui.PushStyleColor(ImGuiCol.Text, Danger); ImGui.TextWrapped(Error); ImGui.PopStyleColor(); }
@@ -241,6 +258,7 @@ internal sealed partial class MainWindow
         { config.Language = Localization.Codes[language]; Localization.Apply(config.Language); config.Save(); }
         ImGui.TextWrapped(L.T("Auto usa o idioma do cliente. Português (Brasil) e espanhol são escolhas manuais."));
         EndCard();
+        DrawDependencySettings();
         BeginCard("supervisionSettings");
         ImGui.TextColored(Gold, L.T("Mantenha seu personagem sob supervisão"));
         ImGui.TextWrapped(L.T("O aviso aparece antes de cada sessão, inclusive ao usar /fatepilot start."));

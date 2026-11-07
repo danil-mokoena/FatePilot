@@ -33,6 +33,7 @@ internal static class IntegrationIds
     public const string PositioningPresetsSetActiveList = "BossMod.Presets.SetActiveList";
     public const string PositioningPresetsSetForceDisabled = "BossMod.Presets.SetForceDisabled";
     public const string TravelAbort = "Lifestream.Abort";
+    public const string TravelAethernetTeleportById = "Lifestream.AethernetTeleportById";
     public const string TravelCanChangeInstance = "Lifestream.CanChangeInstance";
     public const string TravelChangeInstance = "Lifestream.ChangeInstance";
     public const string TravelGetCurrentInstance = "Lifestream.GetCurrentInstance";

@@ -239,10 +239,20 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
     {
         if (Services.Objects.LocalPlayer == null) return [];
         var sheet = Services.Data.GetExcelSheet<Aetheryte>();
-        return Services.Aetherytes.Select(a => sheet.GetRowOrDefault(a.AetheryteId)).Where(a => a.HasValue && a.Value.IsAetheryte)
+        var list = Services.Aetherytes.Select(a => sheet.GetRowOrDefault(a.AetheryteId)).Where(a => a.HasValue && a.Value.IsAetheryte)
             .Select(a => new Destination(a!.Value.Territory.RowId, a.Value.RowId,
                 L.T("{0} — {1}", a.Value.Territory.Value.PlaceName.Value.Name.ExtractText(), a.Value.PlaceName.Value.Name.ExtractText())))
-            .DistinctBy(d => d.AetheryteId).OrderBy(d => d.Name).ToList();
+            .DistinctBy(d => d.AetheryteId).ToList();
+        // Zones without an aetheryte become reachable through a neighbouring city's aethernet.
+        foreach (var gate in Gateways.All)
+        {
+            if (list.Any(d => d.TerritoryId == gate.Territory) || !list.Any(d => d.AetheryteId == gate.ViaAetheryteId)) continue;
+            var zone = Services.Data.GetExcelSheet<TerritoryType>().GetRowOrDefault(gate.Territory)?.PlaceName.Value.Name.ExtractText();
+            var via = sheet.GetRowOrDefault(gate.ViaAetheryteId)?.PlaceName.Value.Name.ExtractText();
+            if (!string.IsNullOrEmpty(zone) && !string.IsNullOrEmpty(via))
+                list.Add(new Destination(gate.Territory, gate.ViaAetheryteId, L.T("{0} — via {1}", zone, via)));
+        }
+        return list.OrderBy(d => d.Name).ToList();
     }
 
     public void Move(Vector3 position, bool fly) => nav.Move(position, fly);
@@ -278,6 +288,12 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
     {
         ownsTravelService = true;
         Services.Plugin.GetIpcSubscriber<int, object>(IntegrationIds.TravelChangeInstance).InvokeAction(instance);
+    }
+    public void AethernetTeleport(uint shardId)
+    {
+        ownsTravelService = true;
+        var accepted = Services.Plugin.GetIpcSubscriber<uint, bool>(IntegrationIds.TravelAethernetTeleportById).InvokeFunc(shardId);
+        if (!accepted) Log(L.T("O módulo de viagens recusou o aethernet; nova tentativa em instantes."));
     }
     public void AcknowledgeTravelComplete() => ownsTravelService = false;
     public void Recover() => combat.Recover();
