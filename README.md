@@ -17,10 +17,12 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
   - *Food:* pick a meal from your bags (with its icon); FatePilot eats it out of combat before Well Fed runs out and confirms the new timer.
   - *Limits:* return when free bag slots or gear durability fall below a value.
 - **Route profiles.** Save every setting under a name (route, filters, goals, costs, inventory and jobs) and load it with one click.
+- **NPC-started FATEs: the start prompt is confirmed.** After the conversation pages, the "Yes" of the FATE start prompt is now clicked: it is accepted right after FatePilot's own conversation or interaction with the bound FATE NPC (still targeted and in range). The hand-over between the last page and the prompt no longer stops the session.
+- **Your own prompts no longer stop the session.** A confirmation you open yourself (for example discarding an item) is waited out and never clicked; the session continues when it closes. Unrelated NPC conversations still stop it.
 - **Session summary** after each session: FATEs and gemstones (with per-hour rates), time, gil, Greens, food, repairs and job changes.
 - **Interface.** Grouped sidebar (Session · Character · Tools) with About and Settings at the bottom, consistent margins on every page, game icons in the compact panel (gemstones, gil) and the plugin names in Settings → Dependencies.
 
-133 local tests pass, with zero build warnings/errors. Pause/resume, the job queue, self-repair, food and the gemstone-trader return still need supervised in-game validation.
+136 local tests pass, with zero build warnings/errors. Pause/resume, the job queue, self-repair, food and the gemstone-trader return still need supervised in-game validation.
 
 ### New in 0.4.2
 
