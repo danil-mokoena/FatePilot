@@ -5,7 +5,19 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.8.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.8.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 0.8.1 (full code review)
+
+- **Second Gysahl Greens restock no longer stops the session.** After a completed purchase the shop stayed tracked, so any later Yes/No (a FATE start prompt, a discard confirmation) marked it as a foreign shop and the next restock stopped at once. The shop is now released as soon as it closes, and on pause, retry or job switch.
+- **Waiting at the FATE hotspot is safer:** an unreachable spot no longer stops the whole session (FatePilot just waits where it is), and if the mount never comes (swimming, no mount) it walks after a few seconds instead of retrying forever.
+- **A FATE that goes from "preparing" to "running" is counted once** in the zone history, and a prioritized FATE alerts only once.
+- **Restock trips:** a prompt you open on the way to the vendor (discarding an item) is waited out instead of stopping the session; an automatic retry now forgets a half-done trip, so a later arrival is never mistaken for the vendor trip; a purchase already sent is never abandoned by a retry (that case still stops for review).
+- **Self-repair:** a momentary refusal by the game (animation lock right after combat) is retried a minute later; repair is turned off for the session only after three refusals in a row.
+- **Achievements:** group-boss FATEs show a warning instead of the Prioritize button while "Skip known group bosses" is on, since that option would never let them run. A group boss engaging you is now reported as a problem stop.
+- The Achievements data no longer rebuilds every frame if the game data cannot be read; it retries every 30 seconds.
+
+151 local tests pass, with zero build warnings/errors.
 
 ### New in 0.8
 
