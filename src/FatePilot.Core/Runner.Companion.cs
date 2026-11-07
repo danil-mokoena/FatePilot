@@ -23,6 +23,7 @@ public sealed partial class Runner
         if (w.CompanionSecondsLeft is > 0)
         {
             companionPending = false;
+            GreensUsed++;
             CompanionStatus = L.T("Chocobo invocado; retomando a rota.");
             runtime.Log(CompanionStatus);
         }

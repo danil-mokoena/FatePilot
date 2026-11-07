@@ -54,6 +54,7 @@ public sealed partial class Runner(IRuntime runtime)
             sessionStarted = now;
             ResetRestock();
             ResetCompanion();
+            ResetUpkeep();
             pendingOptions = null; OptionsError = null;
             previousGemstones = world.Gemstones;
             Selected = null;
@@ -79,6 +80,7 @@ public sealed partial class Runner(IRuntime runtime)
         try { runtime.End(); }
         catch (Exception ex) { Status += L.T(" Restauração: {0}", ex.Message); State = RunState.Faulted; }
         Selected = null;
+        CaptureSummary(Status);
         runtime.Log(Status);
     }
 
@@ -87,7 +89,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (!IsRunning) return;
         try
         {
-            ElapsedSeconds = Math.Max(ElapsedSeconds, now - sessionStarted);
+            if (State != RunState.Paused) ElapsedSeconds = Math.Max(ElapsedSeconds, now - sessionStarted - pausedTotal);
             if (w.LoggedIn && !w.Loading)
             {
                 GemstonesEarned += Math.Max(0, w.Gemstones - previousGemstones);
@@ -96,20 +98,24 @@ public sealed partial class Runner(IRuntime runtime)
             if (!w.LoggedIn && !w.Loading) { Stop(L.T("Sessão encerrada: personagem desconectado."), true); return; }
             if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
-            if (w.Job != 0 && w.Job != sessionJob) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
+            if (w.Job != 0 && w.Job != sessionJob && State is not (RunState.Paused or RunState.SwitchingJob)) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
+            if (State == RunState.Paused) return;
             ObserveCompanion(w, now);
+            ObserveFood(w, now);
             ApplyPendingOptions(w);
             if (w.LoggedIn && !w.Loading && options.AvoidGemstoneCap && w.GemstoneCap <= 0)
             { Stop(L.T("Não foi possível consultar o limite de gemstones."), true); return; }
             if (PendingReturnGoal == ReturnGoal.None)
             {
-                PendingReturnGoal = SessionGoals.Evaluate(options, Completed, GemstonesEarned, ElapsedSeconds, w.Gemstones, w.GemstoneCap);
+                PendingReturnGoal = SessionGoals.Evaluate(options, Completed, GemstonesEarned, ElapsedSeconds, w.Gemstones, w.GemstoneCap,
+                    w.FreeBagSlots, SelfRepairActive ? -1 : w.MinDurability);
                 if (PendingReturnGoal != ReturnGoal.None)
                     runtime.Log(L.T("{0} atingida. Retorno após o FATE em andamento.", SessionGoals.Label(PendingReturnGoal)));
             }
 
             if (State == RunState.Teleporting) { TickTeleport(w, now); return; }
             if (State == RunState.Gateway) { TickGateway(w, now); return; }
+            if (State == RunState.SwitchingJob) { TickSwitchJob(w, now); return; }
             if (State == RunState.InstanceChange) { TickInstance(w, now); return; }
             if (w.Loading) { Stop(L.T("Transição de área não solicitada pelo FatePilot."), true); return; }
             if (w.Territory != expectedTerritory) { Stop(L.T("A zona mudou fora da rota do FatePilot."), true); return; }
@@ -117,6 +123,7 @@ public sealed partial class Runner(IRuntime runtime)
             if (options.ExcludeGroupBosses && w.Enemies.Any(e => e.TargetingPlayer && FateRules.IsGroupBoss(e.FateId)))
             { Stop(L.T("Um chefe de grupo entrou em combate com você. Sessão interrompida.")); return; }
             if (State == RunState.Restocking) { TickRestock(w, now); return; }
+            if (State == RunState.Repairing) { TickRepair(w, now); return; }
             if (w.EventInteractionError != null) { Stop(w.EventInteractionError); return; }
             if (Selected != null && (w.OwnEventInteraction || w.EventInteractionPending))
             {
@@ -138,6 +145,7 @@ public sealed partial class Runner(IRuntime runtime)
             if (HandleUnexpectedCombat(w, now)) return;
             if (companionPending && !w.InCombat && State is (RunState.Selecting or RunState.Waiting or RunState.Landing) && !HasPriorityCompanionThreat(w))
             { runtime.StopMovement(); runtime.SetCombat(false); return; }
+            if (TryApplyPause(w, now)) return;
             if (PendingReturnGoal != ReturnGoal.None && State == RunState.HubApproach)
             { nextInstance = 0; runtime.StopMovement(); Enter(RunState.Selecting, SessionGoals.Label(PendingReturnGoal), now); }
 
@@ -170,10 +178,13 @@ public sealed partial class Runner(IRuntime runtime)
         if (PendingReturnGoal != ReturnGoal.None)
         {
             returning = true;
-            Teleport(options.ReturnDestination!, w, now);
+            Teleport(ReturnTarget, w, now);
             return;
         }
         if (TryRestock(w, now)) return;
+        if (TryRepair(w, now)) return;
+        if (TryAdvanceJobQueue(w, now)) return;
+        if (TryEatFood(w, now)) return;
         if (options.Route.Count > 0 && options.Route.All(d => d.TerritoryId != w.Territory))
         {
             Teleport(options.Route[0], w, now);
@@ -354,6 +365,10 @@ public sealed partial class Runner(IRuntime runtime)
         }
     }
 
+    // Gemstone-driven returns go to the chosen gemstone trader city when one is set.
+    private Destination ReturnTarget => PendingReturnGoal is ReturnGoal.Gemstones or ReturnGoal.CurrencyCap && options.GemstoneDestination != null
+        ? options.GemstoneDestination : options.ReturnDestination!;
+
     private void Teleport(Destination destination, World w, double now)
     {
         if (w.InCombat || w.Casting || w.Occupied) return;
@@ -424,6 +439,7 @@ public sealed partial class Runner(IRuntime runtime)
             runtime.End();
             State = RunState.Finished;
             Status = L.T("Retorno concluído: {0}.", SessionGoals.Label(PendingReturnGoal));
+            CaptureSummary(Status);
             runtime.Log(Status);
             return;
         }

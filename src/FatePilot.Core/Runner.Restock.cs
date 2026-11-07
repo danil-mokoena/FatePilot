@@ -130,7 +130,7 @@ public sealed partial class Runner
                 goto case RestockStage.ToRoute;
             case RestockStage.ToRoute:
                 if (PendingReturnGoal != ReturnGoal.None)
-                { returning = true; Teleport(options.ReturnDestination!, w, now); return; }
+                { returning = true; Teleport(ReturnTarget, w, now); return; }
                 Teleport(restockResume!, w, now);
                 break;
         }
