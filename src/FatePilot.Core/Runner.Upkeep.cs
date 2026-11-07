@@ -15,7 +15,7 @@ public sealed partial class Runner
     public void TogglePauseAfterFate() { if (IsRunning && !IsPaused) PauseAfterFate = !PauseAfterFate; }
 
     private bool SafeToPause => State is not (RunState.Teleporting or RunState.Gateway or RunState.InstanceChange
-        or RunState.Restocking or RunState.SwitchingJob or RunState.Repairing or RunState.Paused);
+        or RunState.Restocking or RunState.SwitchingJob or RunState.Repairing or RunState.Paused or RunState.Retrying);
 
     private bool TryApplyPause(World w, double now)
     {
@@ -73,6 +73,7 @@ public sealed partial class Runner
         {
             foodPending = false; foodDisabled = true;
             runtime.Log(L.T("Uso de comida não confirmado; suspenso nesta sessão. A rota continua."));
+            Alert(NotifyKind.Problem, L.T("Uso de comida não confirmado; suspenso nesta sessão. A rota continua."));
         }
     }
 
@@ -124,7 +125,7 @@ public sealed partial class Runner
         if (w.MinDurability > durabilityBefore)
         { Repairs++; runtime.Log(L.T("Equipamento reparado: {0}% → {1}%.", durabilityBefore, w.MinDurability)); }
         else
-        { repairDisabled = true; runtime.Log(L.T("Reparo não confirmado. Reparo próprio desativado nesta sessão.")); }
+        { repairDisabled = true; runtime.Log(L.T("Reparo não confirmado. Reparo próprio desativado nesta sessão.")); Alert(NotifyKind.Problem, L.T("Reparo não confirmado. Reparo próprio desativado nesta sessão.")); }
         Enter(RunState.Selecting, L.T("Procurando FATEs elegíveis."), now);
     }
 

@@ -2,7 +2,8 @@ using System.Numerics;
 
 namespace FatePilot.Core;
 
-public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending, Gateway, Paused, SwitchingJob, Repairing }
+public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending, Gateway, Paused, SwitchingJob, Repairing, Retrying }
+public enum NotifyKind { Stopped, Goal, PriorityFate, Problem, Tell }
 public enum EventState { Other, Preparing = 3, Running = 4, Ending = 5, Ended = 7, Failed = 8 }
 public enum FateKind { Unknown, Combat, Collection, Defense, Escort }
 public enum ObjectiveRole { Starter, Recipient, Escort, Pickup }
@@ -58,6 +59,17 @@ public sealed class RunOptions
     public int BonusWorthYalms { get; set; } = 200;
     public bool IdleToHotspot { get; set; } = true;
     public int MinutesPerZone { get; set; }
+    // 0.8: notifications (game chat sound + local chat line) and automatic retry.
+    public bool NotifySound { get; set; } = true;
+    public int NotifySoundEffect { get; set; } = 6;
+    public bool NotifyChat { get; set; } = true;
+    public bool NotifyOnStop { get; set; } = true;
+    public bool NotifyOnGoal { get; set; } = true;
+    public bool NotifyOnPriorityFate { get; set; } = true;
+    public bool NotifyOnProblem { get; set; } = true;
+    public bool NotifyOnTell { get; set; } = true;
+    public bool AutoRetry { get; set; } = true;
+    public int MaxRetries { get; set; } = 2;
     public bool UseTickets { get; set; }
     public bool PayGilWhenTicketsRunOut { get; set; }
     public int TicketMinimumFare { get; set; }
@@ -102,6 +114,8 @@ public sealed class RunOptions
             throw new InvalidOperationException(L.T("Os limites de bolsa, durabilidade, reparo ou comida contêm valores inválidos."));
         if (MinutesPerZone is < 0 or > 600 || BonusWorthYalms is < 0 or > 2000)
             throw new InvalidOperationException(L.T("O tempo por zona ou o peso do bônus contém valores inválidos."));
+        if (NotifySoundEffect is < 1 or > 16 || MaxRetries is < 0 or > 5)
+            throw new InvalidOperationException(L.T("O som do aviso ou o número de tentativas contém valores inválidos."));
         if (UseFood && FoodItemId == 0)
             throw new InvalidOperationException(L.T("Escolha uma comida da bolsa ou desative o uso de comida."));
         if (UseJobQueue && (JobQueue.Count == 0 || JobQueue.Any(j => j.TargetLevel is < 1 or > 100 || j.Job is 0 or (>= 8 and <= 18))))
@@ -219,4 +233,5 @@ public interface IRuntime
     bool EquipGearset(int index);
     bool UseFood(uint itemId, bool hq);
     bool StartRepair();
+    void Notify(NotifyKind kind, string message);
 }

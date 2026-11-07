@@ -73,6 +73,7 @@ public sealed partial class Runner(IRuntime runtime)
             transitionUntil = -1;
             idleSince = noEnemySince = now;
             seenFates.Clear(); lastHistoryTick = zoneSince = now; idleMoved = false;
+            retriesUsed = 0; retryReason = null;
             Enter(RunState.Selecting, L.T("Procurando FATEs elegíveis."), now);
         }
         catch (Exception ex) { Stop(L.T("Não foi possível iniciar: {0}", ex.GetBaseException().Message), true); }
@@ -81,6 +82,7 @@ public sealed partial class Runner(IRuntime runtime)
     public void Stop(string? reason = null, bool fault = false)
     {
         reason ??= L.T("Parado pelo usuário.");
+        var wasRunning = IsRunning;
         State = fault ? RunState.Faulted : RunState.Stopped;
         Status = reason;
         try { runtime.End(); }
@@ -88,6 +90,7 @@ public sealed partial class Runner(IRuntime runtime)
         Selected = null;
         CaptureSummary(Status);
         runtime.Log(Status);
+        if (wasRunning && reason != L.T("Parado pelo usuário.")) Alert(NotifyKind.Stopped, L.T("Sessão parada: {0}", Status));
     }
 
     public void Tick(World w, double now)
@@ -106,8 +109,9 @@ public sealed partial class Runner(IRuntime runtime)
             if (!w.LoggedIn && !w.Loading) { Stop(L.T("Sessão encerrada: personagem desconectado."), true); return; }
             if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
-            if (w.Job != 0 && w.Job != sessionJob && State is not (RunState.Paused or RunState.SwitchingJob)) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
+            if (w.Job != 0 && w.Job != sessionJob && State is not (RunState.Paused or RunState.SwitchingJob or RunState.Retrying)) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
             if (State == RunState.Paused) { lastHistoryTick = now; return; }
+            if (State == RunState.Retrying) { lastHistoryTick = now; TickRetry(w, now); return; }
             RecordHistory(w, now);
             ObserveCompanion(w, now);
             ObserveFood(w, now);
@@ -119,21 +123,25 @@ public sealed partial class Runner(IRuntime runtime)
                 PendingReturnGoal = SessionGoals.Evaluate(options, Completed, GemstonesEarned, ElapsedSeconds, w.Gemstones, w.GemstoneCap,
                     w.FreeBagSlots, SelfRepairActive ? -1 : w.MinDurability);
                 if (PendingReturnGoal != ReturnGoal.None)
-                    runtime.Log(L.T("{0} atingida. Retorno após o FATE em andamento.", SessionGoals.Label(PendingReturnGoal)));
+                {
+                    var goal = L.T("{0} atingida. Retorno após o FATE em andamento.", SessionGoals.Label(PendingReturnGoal));
+                    runtime.Log(goal);
+                    Alert(NotifyKind.Goal, goal);
+                }
             }
 
             if (State == RunState.Teleporting) { TickTeleport(w, now); return; }
             if (State == RunState.Gateway) { TickGateway(w, now); return; }
             if (State == RunState.SwitchingJob) { TickSwitchJob(w, now); return; }
             if (State == RunState.InstanceChange) { TickInstance(w, now); return; }
-            if (w.Loading) { Stop(L.T("Transição de área não solicitada pelo FatePilot."), true); return; }
-            if (w.Territory != expectedTerritory) { Stop(L.T("A zona mudou fora da rota do FatePilot."), true); return; }
-            if (w.TravelBusy) { Stop(L.T("módulo de viagens iniciou outra tarefa durante a sessão."), true); return; }
+            if (w.Loading) { StopOrRecover(L.T("Transição de área não solicitada pelo FatePilot."), now); return; }
+            if (w.Territory != expectedTerritory) { StopOrRecover(L.T("A zona mudou fora da rota do FatePilot."), now); return; }
+            if (w.TravelBusy) { StopOrRecover(L.T("módulo de viagens iniciou outra tarefa durante a sessão."), now); return; }
             if (options.ExcludeGroupBosses && w.Enemies.Any(e => e.TargetingPlayer && FateRules.IsGroupBoss(e.FateId)))
             { Stop(L.T("Um chefe de grupo entrou em combate com você. Sessão interrompida.")); return; }
             if (State == RunState.Restocking) { TickRestock(w, now); return; }
             if (State == RunState.Repairing) { TickRepair(w, now); return; }
-            if (w.EventInteractionError != null) { Stop(w.EventInteractionError); return; }
+            if (w.EventInteractionError != null) { StopOrRecover(w.EventInteractionError, now); return; }
             if (Selected != null && (w.OwnEventInteraction || w.EventInteractionPending))
             {
                 runtime.StopMovement();
@@ -155,7 +163,7 @@ public sealed partial class Runner(IRuntime runtime)
                     return;
                 }
                 runtime.Log($"Interaction stopped in {State}: {w.InteractionDiagnostic ?? "no native details"}");
-                Stop(L.T("Um diálogo ou outra interação interrompeu a sessão.")); return;
+                StopOrRecover(L.T("Um diálogo ou outra interação interrompeu a sessão."), now); return;
             }
             waitingForPlayerDialog = false;
             if (w.NavError != null) { SkipOrFail(L.T("Navegação: {0}", w.NavError), now); return; }
@@ -471,6 +479,7 @@ public sealed partial class Runner(IRuntime runtime)
             Status = L.T("Retorno concluído: {0}.", SessionGoals.Label(PendingReturnGoal));
             CaptureSummary(Status);
             runtime.Log(Status);
+            Alert(NotifyKind.Goal, Status);
             return;
         }
         if (restockStage == RestockStage.ToVendor)
@@ -528,7 +537,11 @@ public sealed partial class Runner(IRuntime runtime)
         if (w.Loading || !w.LoggedIn || w.Territory == 0) return;
         History.For(w.Territory).Seconds += dt;
         foreach (var f in w.Fates)
-            if (f.TerritoryId == w.Territory && seenFates.Add(Selection.Key(f, w))) History.RecordSpot(w.Territory, f.Position);
+            if (f.TerritoryId == w.Territory && seenFates.Add(Selection.Key(f, w)))
+            {
+                History.RecordSpot(w.Territory, f.Position);
+                if (options.PriorityFates.Contains(f.Id)) Alert(NotifyKind.PriorityFate, L.T("FATE priorizado apareceu: {0}", f.Name));
+            }
     }
 
     // While waiting with nothing eligible, fly once to where FATEs most often appear in this zone.
@@ -551,7 +564,7 @@ public sealed partial class Runner(IRuntime runtime)
     // User-requested skip of the current FATE (5-minute ignore, then pick the next one).
     public void Skip(double now)
     {
-        if (!IsRunning || Selected == null || State is RunState.Teleporting or RunState.Gateway or RunState.InstanceChange) return;
+        if (!IsRunning || Selected == null || State is RunState.Teleporting or RunState.Gateway or RunState.InstanceChange or RunState.Retrying) return;
         SkipOrFail(L.T("Pulado pelo usuário."), now);
     }
 

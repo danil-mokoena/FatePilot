@@ -35,6 +35,7 @@ public sealed partial class Runner
             companionDisabled = true;
             CompanionStatus = L.T("Invocação não confirmada. Uso de Greens suspenso nesta sessão; a rota continua.");
             runtime.Log(CompanionStatus);
+            Alert(NotifyKind.Problem, CompanionStatus);
         }
     }
 
