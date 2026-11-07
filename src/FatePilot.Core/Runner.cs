@@ -27,7 +27,7 @@ public sealed partial class Runner(IRuntime runtime)
     private uint sessionJob;
     private uint expectedTerritory;
     private FateKey selectedKey;
-    private bool participated, sawLoading, returning;
+    private bool participated, sawLoading, returning, waitingForPlayerDialog;
     private int nextInstance;
     private Destination? teleportDestination;
 
@@ -138,9 +138,17 @@ public sealed partial class Runner(IRuntime runtime)
                 // Wait only inside the action's deadline and never click during it.
                 if (!w.DialogueOpen && now < transitionUntil)
                 { runtime.StopMovement(); runtime.SetCombat(false); return; }
+                // A plain prompt the player opened (discard item, confirmations) with no NPC
+                // event behind it: wait for it to close, never click it, then carry on.
+                if (w.DialogueOpen && !w.Occupied)
+                {
+                    if (!waitingForPlayerDialog) { waitingForPlayerDialog = true; runtime.Log(L.T("Janela aberta pelo jogador; aguardando ela fechar.")); }
+                    return;
+                }
                 runtime.Log($"Interaction stopped in {State}: {w.InteractionDiagnostic ?? "no native details"}");
                 Stop(L.T("Um diálogo ou outra interação interrompeu a sessão.")); return;
             }
+            waitingForPlayerDialog = false;
             if (w.NavError != null) { SkipOrFail(L.T("Navegação: {0}", w.NavError), now); return; }
             if (HandleUnexpectedCombat(w, now)) return;
             if (companionPending && !w.InCombat && State is (RunState.Selecting or RunState.Waiting or RunState.Landing) && !HasPriorityCompanionThreat(w))
