@@ -5,7 +5,14 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.1.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.2.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 1.2
+
+- **Automatic gemstone purchase** (on by default; Inventory → Gemstone purchase queue → Buy automatically in the trader's shop). Inside the conversation FatePilot itself opened with the verified trader, it picks the shop in the menu, finds the queued item by its name in the shop's list, asks for the quantity your balance covers and accepts only a confirmation that names that item. When the bag shows the purchase, it closes the shop and goes back to the FATEs. Anything unexpected — a window that is not the trader's, a confirmation for something else, the game refusing the purchase (full bags, shared FATE rank) — stops the automation and leaves the purchase to you, with the reason in the status; the queue keeps working as in 1.1.
+- **New trader item picker**: a table like a schedule, with filter pills (All, Materials, Housing, Orchestrion, Gear, Other — with game icons and counts), search by name or category, sort by price, your gemstone balance, and per item: price, how many you already have, how many your balance covers right now, and an Add button (adding again increases the quantity; unique items you already own are marked).
+
+163 local tests pass, with zero build warnings/errors. The automatic purchase needs in-game validation.
 
 ### New in 1.1
 
