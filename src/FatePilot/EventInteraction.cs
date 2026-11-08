@@ -113,7 +113,8 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         // director's; this verified object's own event is part of the same interaction.
         var nativeObj = (NativeObject*)obj.Address;
         var events = new List<uint> { 0x801A0000u | actor.FateId, nativeFate->ArrayEventHandler.Id };
-        if (actor.Role == ObjectiveRole.Pickup)
+        // The verified pickup or turn-in NPC can also run its own event (e.g. the Item Request window).
+        if (actor.Role is ObjectiveRole.Pickup or ObjectiveRole.Recipient)
         {
             if (nativeObj->EventId.Id != 0) events.Add(nativeObj->EventId.Id);
             if (nativeObj->EventHandler != null && nativeObj->EventHandler->Info.EventId.Id != 0) events.Add(nativeObj->EventHandler->Info.EventId.Id);
@@ -126,7 +127,7 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         target->InteractWithObject((NativeObject*)obj.Address, true);
     }
 
-    public static bool DialogueOpen => Visible("Talk") || Visible("SelectYesno") || Visible("SelectString") || Visible("SelectIconString");
+    public static bool DialogueOpen => Visible("Talk") || Visible("SelectYesno") || Visible("SelectString") || Visible("SelectIconString") || Visible("Request");
 
     private int MatchingSelectorIndex()
     {
@@ -221,6 +222,7 @@ internal sealed unsafe class EventInteraction(Action<string> log)
             if (framework != null) framework->InteractWithHandlerFromSelector(selectedHandler);
             return;
         }
+        if (owned?.Role == ObjectiveRole.Recipient && AdvanceRequest()) return;
         var talk = (AtkUnitBase*)Services.GameGui.GetAddonByName("Talk").Address;
         if (talk != null && talk->IsVisible)
         {
@@ -229,6 +231,48 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         }
         var yesno = (AtkUnitBase*)Services.GameGui.GetAddonByName("SelectYesno").Address;
         if (yesno != null && yesno->IsVisible) yesno->FireCallbackInt(0);
+    }
+
+    // 1.3.4: the FATE turn-in "Item Request" window, inside our own conversation with the verified
+    // turn-in NPC. Same steps as by hand: open an empty slot, pick the offered item, Hand Over.
+    private int requestSlot, requestSteps;
+
+    private bool AdvanceRequest()
+    {
+        var request = (AddonRequest*)Services.GameGui.GetAddonByName("Request").Address;
+        if (request == null || !request->AtkUnitBase.IsVisible) { requestSlot = requestSteps = 0; return false; }
+        if (++requestSteps > 40) return true; // stuck: leave it to the interaction timeout and the player
+        var hand = request->HandOverButton;
+        if (hand != null && hand->IsEnabled)
+        {
+            ClickButton(&request->AtkUnitBase, hand, 0);
+            log(L.T("Itens do FATE entregues pela janela de pedido."));
+            return true;
+        }
+        var menu = (AtkUnitBase*)Services.GameGui.GetAddonByName("ContextIconMenu").Address;
+        if (menu != null && menu->IsVisible)
+        {
+            // First offered item: the game lists only items that fit this request.
+            var values = stackalloc AtkValue[5];
+            values[0].SetInt(0); values[1].SetInt(0); values[2].SetUInt(1021003); values[3].SetUInt(0); values[4].SetInt(0);
+            menu->FireCallback(5, values, true);
+            return true;
+        }
+        var count = Math.Clamp(request->EntryCount, 1, 5);
+        var open = stackalloc AtkValue[4];
+        open[0].SetInt(2); open[1].SetInt(requestSlot % count); open[2].SetInt(0); open[3].SetInt(0);
+        request->AtkUnitBase.FireCallback(4, open, false);
+        requestSlot++;
+        return true;
+    }
+
+    private static void ClickButton(AtkUnitBase* addon, AtkComponentButton* button, int which)
+    {
+        var node = button->AtkComponentBase.OwnerNode;
+        if (node == null) return;
+        var evt = new AtkEvent { Target = (AtkEventTarget*)node, Listener = (AtkEventListener*)addon };
+        var data = new AtkEventData();
+        addon->ReceiveEvent(AtkEventType.ButtonClick, which, &evt, &data);
     }
 
     // Callers must first prove ownership of the native event and actor.
@@ -254,5 +298,5 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         return addon != null && addon->IsVisible;
     }
 
-    public void Cancel() { owned = null; lease.Cancel(); localDialogue.Reset(); lastStatus = InteractionStatus.None; interactionSentAt = double.NegativeInfinity; }
+    public void Cancel() { requestSlot = requestSteps = 0; owned = null; lease.Cancel(); localDialogue.Reset(); lastStatus = InteractionStatus.None; interactionSentAt = double.NegativeInfinity; }
 }
