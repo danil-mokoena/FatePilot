@@ -196,12 +196,13 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
                 if (obj.ObjectKind == ObjectKind.Aetheryte && obj.IsTargetable
                     && (nearestHub == null || Vector3.Distance(player.Position, obj.Position) < Vector3.Distance(player.Position, nearestHub.Value)))
                     nearestHub = obj.Position;
-                if (obj is IBattleNpc npc && npc.IsTargetable && !npc.IsDead && npc.StatusFlags.HasFlag(StatusFlags.Hostile))
+                // 1.3.3: an enemy is something the game lets us auto-attack. The "hostile" status flag
+                // is also set on friendly FATE NPCs while they fight, which made FatePilot target them.
+                if (obj is IBattleNpc npc && npc.IsTargetable && !npc.IsDead && Attackable(npc))
                 {
                     var fateId = ((NativeObject*)npc.Address)->FateId;
                     var victim = npc.TargetObject;
-                    var attackingNpc = victim is { ObjectKind: ObjectKind.EventNpc or ObjectKind.BattleNpc }
-                        && !(victim is IBattleNpc v && v.StatusFlags.HasFlag(StatusFlags.Hostile));
+                    var attackingNpc = victim is { ObjectKind: ObjectKind.EventNpc or ObjectKind.BattleNpc } && !Attackable(victim);
                     enemies.Add(new(npc.GameObjectId, fateId, npc.Position, npc.HitboxRadius, npc.TargetObjectId == player.GameObjectId)
                         { NameId = npc.NameId, TargetId = npc.TargetObjectId, AttackingNpc = attackingNpc });
                 }
@@ -341,8 +342,15 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         if (manager != null && manager->GetCurrentFateId() != 0) manager->LevelSync();
     }
     public void SetCombat(bool enabled) => combat.SetEnabled(enabled);
+    // Auto-attack (action 7) is only usable on things the player can fight.
+    private static unsafe bool Attackable(IGameObject obj) =>
+        obj.Address != 0 && ActionManager.CanUseActionOnTarget(7, (NativeObject*)obj.Address);
+
     public void Target(ulong id)
     {
+        var candidate = Services.Objects.FirstOrDefault(x => x.GameObjectId == id);
+        // Never select a friendly NPC as a combat target.
+        if (candidate is IBattleNpc && !Attackable(candidate)) return;
         var target = Services.Objects.FirstOrDefault(x => x.GameObjectId == id);
         if (target == null) return;
         ownedTarget = id;
