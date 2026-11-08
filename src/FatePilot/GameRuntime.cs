@@ -199,7 +199,11 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
                 if (obj is IBattleNpc npc && npc.IsTargetable && !npc.IsDead && npc.StatusFlags.HasFlag(StatusFlags.Hostile))
                 {
                     var fateId = ((NativeObject*)npc.Address)->FateId;
-                    enemies.Add(new(npc.GameObjectId, fateId, npc.Position, npc.HitboxRadius, npc.TargetObjectId == player.GameObjectId) { NameId = npc.NameId });
+                    var victim = npc.TargetObject;
+                    var attackingNpc = victim is { ObjectKind: ObjectKind.EventNpc or ObjectKind.BattleNpc }
+                        && !(victim is IBattleNpc v && v.StatusFlags.HasFlag(StatusFlags.Hostile));
+                    enemies.Add(new(npc.GameObjectId, fateId, npc.Position, npc.HitboxRadius, npc.TargetObjectId == player.GameObjectId)
+                        { NameId = npc.NameId, TargetId = npc.TargetObjectId, AttackingNpc = attackingNpc });
                 }
             }
         }
