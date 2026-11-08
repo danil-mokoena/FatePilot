@@ -141,6 +141,7 @@ public sealed partial class Runner(IRuntime runtime)
             if (options.ExcludeGroupBosses && w.Enemies.Any(e => e.TargetingPlayer && FateRules.IsGroupBoss(e.FateId)))
             { Stop(L.T("Um chefe de grupo entrou em combate com você. Sessão interrompida."), true); return; }
             if (State == RunState.Restocking) { TickRestock(w, now); return; }
+            if (State == RunState.ToTrader) { TickTrader(w, now); return; }
             if (State == RunState.Repairing) { TickRepair(w, now); return; }
             if (w.EventInteractionError != null) { StopOrRecover(w.EventInteractionError, now); return; }
             if (Selected != null && (w.OwnEventInteraction || w.EventInteractionPending))
@@ -210,6 +211,8 @@ public sealed partial class Runner(IRuntime runtime)
         if (PendingReturnGoal != ReturnGoal.None)
         {
             returning = true;
+            // A trip to the trader from a zone that has its own trader: just walk to it.
+            if (PendingReturnGoal == ReturnGoal.Trader && GemstoneTraders.In(w.Territory) != null) { EnterTrader(w, now); return; }
             Teleport(ReturnTarget, w, now);
             return;
         }
@@ -411,7 +414,7 @@ public sealed partial class Runner(IRuntime runtime)
     }
 
     // Gemstone-driven returns go to the chosen gemstone trader city when one is set.
-    private Destination ReturnTarget => PendingReturnGoal is ReturnGoal.Gemstones or ReturnGoal.CurrencyCap && options.GemstoneDestination != null
+    private Destination ReturnTarget => PendingReturnGoal is ReturnGoal.Gemstones or ReturnGoal.CurrencyCap or ReturnGoal.Trader && options.GemstoneDestination != null
         ? options.GemstoneDestination : options.ReturnDestination!;
 
     private void Teleport(Destination destination, World w, double now)
@@ -478,12 +481,8 @@ public sealed partial class Runner(IRuntime runtime)
         zoneSince = now; idleMoved = false;
         if (returning)
         {
-            runtime.End();
-            State = RunState.Finished;
-            Status = L.T("Retorno concluído: {0}.", SessionGoals.Label(PendingReturnGoal));
-            CaptureSummary(Status);
-            runtime.Log(Status);
-            Alert(NotifyKind.Goal, Status);
+            if (WantsTrader && GemstoneTraders.In(w.Territory) != null) { EnterTrader(w, now); return; }
+            Finish(L.T("Retorno concluído: {0}.", SessionGoals.Label(PendingReturnGoal)));
             return;
         }
         if (restockStage == RestockStage.ToVendor)

@@ -21,7 +21,7 @@ public sealed partial class Runner
         if (!w.InCombat)
         {
             runtime.SetCombat(false);
-            var resume = Selected != null ? RunState.Mounting : defenseResume == RunState.HubApproach ? RunState.HubApproach : RunState.Selecting;
+            var resume = Selected != null ? RunState.Mounting : defenseResume is RunState.HubApproach or RunState.ToTrader ? defenseResume : RunState.Selecting;
             lastMotion = now; lastPosition = w.Position;
             Enter(resume, L.T("Combate encerrado; retomando a rota."), now);
             return true;
