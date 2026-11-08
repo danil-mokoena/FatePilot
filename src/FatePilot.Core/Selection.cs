@@ -2,16 +2,43 @@ using System.Numerics;
 
 namespace FatePilot.Core;
 
+// Why a FATE is not eligible (None = eligible). The order is the order of the checks.
+public enum FateSkip { None, OtherZone, NotStarted, KindOff, GroupBoss, TooHigh, AlmostDone, TooLittleTime, Ignored, RecentlySkipped }
+
 public static class Selection
 {
     public static FateKey Key(FateInfo f, World w) => new(w.Territory, w.Instance, f.Id, f.StartedAt);
 
+    public static FateSkip Check(FateInfo f, World w, RunOptions o, IReadOnlyDictionary<FateKey, double> excludedUntil, double now)
+    {
+        if (f.TerritoryId != w.Territory) return FateSkip.OtherZone;
+        if (!(f.State == EventState.Running || (f.State == EventState.Preparing && f.CanStart))) return FateSkip.NotStarted;
+        if (!FateRules.Enabled(f, o)) return FateSkip.KindOff;
+        if (o.ExcludeGroupBosses && FateRules.IsGroupBoss(f.Id)) return FateSkip.GroupBoss;
+        if (f.Level > w.Level + o.LevelAbovePlayer) return FateSkip.TooHigh;
+        if (f.Progress >= o.MaximumProgress) return FateSkip.AlmostDone;
+        if (f.State != EventState.Preparing && f.SecondsLeft < o.MinimumSecondsLeft) return FateSkip.TooLittleTime;
+        if (o.ExcludedFates.Contains(f.Id)) return FateSkip.Ignored;
+        if (excludedUntil.TryGetValue(Key(f, w), out var until) && until > now) return FateSkip.RecentlySkipped;
+        return FateSkip.None;
+    }
+
+    public static string Reason(FateSkip skip) => skip switch
+    {
+        FateSkip.OtherZone => L.T("Outra zona"),
+        FateSkip.NotStarted => L.T("Ainda não pode começar"),
+        FateSkip.KindOff => L.T("Tipo desativado"),
+        FateSkip.GroupBoss => L.T("Chefe de grupo"),
+        FateSkip.TooHigh => L.T("Nível alto demais"),
+        FateSkip.AlmostDone => L.T("Quase concluído"),
+        FateSkip.TooLittleTime => L.T("Pouco tempo restante"),
+        FateSkip.Ignored => L.T("Ignorado"),
+        FateSkip.RecentlySkipped => L.T("Pulado há pouco"),
+        _ => L.T("Elegível"),
+    };
+
     public static FateInfo? Choose(World w, RunOptions o, IReadOnlyDictionary<FateKey, double> excludedUntil, double now) => w.Fates
-        .Where(f => f.TerritoryId == w.Territory && (f.State == EventState.Running || (f.State == EventState.Preparing && f.CanStart)) && FateRules.Enabled(f, o)
-            && (!o.ExcludeGroupBosses || !FateRules.IsGroupBoss(f.Id))
-            && f.Level <= w.Level + o.LevelAbovePlayer && f.Progress < o.MaximumProgress
-            && (f.State == EventState.Preparing || f.SecondsLeft >= o.MinimumSecondsLeft) && !o.ExcludedFates.Contains(f.Id)
-            && (!excludedUntil.TryGetValue(Key(f, w), out var until) || until <= now))
+        .Where(f => Check(f, w, o, excludedUntil, now) == FateSkip.None)
         .OrderByDescending(f => o.PriorityFates.Contains(f.Id))
         .ThenBy(f => Score(f, w, o))
         .ThenByDescending(f => o.PreferBonus && f.Bonus)

@@ -1,6 +1,6 @@
 namespace FatePilot.Core;
 
-public enum ReturnGoal { None, Fates, Gemstones, Time, CurrencyCap, BagFull, Durability, JobQueueDone }
+public enum ReturnGoal { None, Fates, Gemstones, Time, CurrencyCap, BagFull, Durability, JobQueueDone, Trader }
 
 public static class SessionGoals
 {
@@ -27,6 +27,7 @@ public static class SessionGoals
         ReturnGoal.BagFull => L.T("Bolsa quase cheia"),
         ReturnGoal.Durability => L.T("Durabilidade baixa"),
         ReturnGoal.JobQueueDone => L.T("Fila de classes concluída"),
+        ReturnGoal.Trader => L.T("Ida ao trocador de gemstones"),
         _ => "",
     };
 }

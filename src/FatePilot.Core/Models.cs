@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace FatePilot.Core;
 
-public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending, Gateway, Paused, SwitchingJob, Repairing, Retrying }
+public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending, Gateway, Paused, SwitchingJob, Repairing, Retrying, ToTrader }
 public enum NotifyKind { Stopped, Goal, PriorityFate, Problem, Tell }
 public enum EventState { Other, Preparing = 3, Running = 4, Ending = 5, Ended = 7, Failed = 8 }
 public enum FateKind { Unknown, Combat, Collection, Defense, Escort }
@@ -70,6 +70,9 @@ public sealed class RunOptions
     public bool NotifyOnTell { get; set; } = true;
     public bool AutoRetry { get; set; } = true;
     public int MaxRetries { get; set; } = 2;
+    // 1.0: rebuild the route when the job's real level changes; walk to the gemstone trader after a gemstone return.
+    public bool FollowLevelRoute { get; set; }
+    public bool VisitGemstoneTrader { get; set; } = true;
     public bool UseTickets { get; set; }
     public bool PayGilWhenTicketsRunOut { get; set; }
     public int TicketMinimumFare { get; set; }
@@ -137,6 +140,27 @@ public static class GemstoneTraders
         [1186] = 217,  // Solution Nine
     };
     public static bool Has(Destination d) => Cities.TryGetValue(d.TerritoryId, out var a) && a == d.AetheryteId;
+
+    // The bicolor gemstone trader of each city and field zone (ENpc id and Level position from the
+    // client's sheets). The position is only a navigation hint; the NPC itself is revalidated in game.
+    public sealed record Trader(uint Territory, uint NpcId, Vector3 Position);
+    private static readonly Dictionary<uint, Trader> traders = new Trader[]
+    {
+        new(813, 1027385, new(701.898f, 21.796f, -45.908f)), new(814, 1027497, new(-482.859f, 417.190f, -629.042f)),
+        new(815, 1027892, new(-541.649f, 45.457f, -217.395f)), new(816, 1027665, new(-253.926f, 40.324f, 466.046f)),
+        new(817, 1027709, new(323.079f, 33.763f, -162.036f)), new(818, 1027766, new(586.613f, 348.980f, -173.632f)),
+        new(819, 1027998, new(-6.760f, -7.700f, 118.517f)), new(820, 1027538, new(-32.822f, 84.184f, 49.302f)),
+        new(956, 1037484, new(423.562f, 166.283f, -423.983f)), new(957, 1037635, new(218.646f, 4.764f, 658.839f)),
+        new(958, 1037724, new(-426.858f, 22.363f, 430.132f)), new(959, 1037793, new(19.638f, -132.952f, -460.746f)),
+        new(960, 1038004, new(468.980f, 437.002f, 330.620f)), new(961, 1037909, new(146.861f, 10.386f, 100.747f)),
+        new(962, 1037055, new(78.367f, 5.142f, -36.784f)), new(963, 1037304, new(-4.756f, 0.900f, -52.845f)),
+        new(1185, 1048383, new(-23.903f, -10.000f, 105.344f)), new(1186, 1049082, new(-198.779f, 0.900f, -4.331f)),
+        new(1187, 1048628, new(301.503f, -172.282f, -484.550f)), new(1188, 1048778, new(-200.336f, 6.300f, -522.772f)),
+        new(1189, 1048933, new(-381.561f, 23.536f, -436.932f)), new(1190, 1049283, new(357.748f, -1.491f, 469.419f)),
+        new(1191, 1049438, new(-258.373f, 30.000f, -594.195f)), new(1192, 1049528, new(30.320f, 53.200f, 802.792f)),
+    }.ToDictionary(t => t.Territory);
+
+    public static Trader? In(uint territory) => traders.GetValueOrDefault(territory);
 }
 
 public sealed class JobGoal
@@ -193,6 +217,7 @@ public sealed record World
     public float? CompanionSecondsLeft { get; init; }
     public bool CanSummonChocobo { get; init; }
     public VendorActor? GreensVendor { get; init; }
+    public VendorActor? GemstoneTrader { get; init; }
     public GreensShopState GreensShop { get; init; }
     public string? GreensShopError { get; init; }
     public int FreeBagSlots { get; init; } = -1;
@@ -236,4 +261,6 @@ public interface IRuntime
     bool UseFood(uint itemId, bool hq);
     bool StartRepair();
     void Notify(NotifyKind kind, string message);
+    // Starts a conversation with the verified gemstone trader; nothing in the conversation is clicked.
+    void TalkTo(VendorActor trader);
 }

@@ -234,6 +234,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (TrySummonCompanion(w, now)) return;
         if (!w.NavReady)
         {
+            Note(L.T("Esperando o módulo de navegação carregar o mapa desta zona…"));
             if (now - since > 180) Stop(L.T("módulo de navegação não carregou a malha desta zona em 180 segundos."), true);
             return;
         }
@@ -415,13 +416,9 @@ public sealed partial class Runner(IRuntime runtime)
 
     private void Teleport(Destination destination, World w, double now)
     {
-        if (w.InCombat || w.Casting || w.Occupied) return;
-        if (w.Mounted || w.Flying)
-        {
-            if (Throttle(now, 2)) { transitionUntil = now + 5; runtime.Dismount(); }
-            if (now - since > 60) Stop(L.T("Desmonte antes do teleporte."), true);
-            return;
-        }
+        // The game teleports mounted or flying, so no dismount. Any wait is shown, never silent.
+        if (w.InCombat) { Note(L.T("Esperando sair do combate para teleportar.")); return; }
+        if (w.Casting || w.Occupied) { Note(L.T("Esperando a ação atual terminar para teleportar.")); return; }
         runtime.StopMovement();
         runtime.CancelEventInteraction();
         runtime.SetCombat(false);
@@ -591,6 +588,14 @@ public sealed partial class Runner(IRuntime runtime)
         runtime.StopMovement();
         runtime.SetCombat(false);
         Enter(RunState.Selecting, reason, now);
+    }
+
+    // A visible reason for a wait: status always, log only when it changes.
+    private void Note(string message)
+    {
+        if (Status == message) return;
+        Status = message;
+        runtime.Log(message);
     }
 
     private bool Throttle(double now, double seconds)
