@@ -47,6 +47,24 @@ Test("Filters exclude unknown types, unstartable preparation, high level and nea
     foreach (var invalid in new[] { fate with { IsCombat=false }, fate with { State=EventState.Preparing }, fate with { Level=110 }, fate with { Progress=99 }, fate with { SecondsLeft=20 }, fate with { TerritoryId=10 } })
         Assert(Selection.Choose(world with { Fates=[invalid] }, Options(), new Dictionary<FateKey,double>(), 0) == null);
 });
+Test("1.3 session progress counts EXP across a level up and seals, ignoring spending and job changes", () =>
+{
+    var p = new SessionProgress();
+    p.Start(new(160, 20, 1000, 5000, false), new(1, 100, 10000));
+    p.Update(new(160, 20, 3000, 5000, false), new(1, 400, 10000));
+    Assert(p.ExpEarned == 2000 && p.SealsEarned == 300);
+    p.Update(new(160, 21, 500, 6000, false), new(1, 50, 10000)); // level up; seals spent
+    Assert(p.ExpEarned == 4500 && p.LevelsGained == 1 && p.SealsEarned == 300);
+    p.Update(new(160, 21, 900, 6000, false), new(1, 150, 10000));
+    Assert(p.ExpEarned == 4900 && p.SealsEarned == 400);
+    p.Update(new(19, 100, 0, 0, true), null); // job change: new baseline, nothing counted
+    p.Update(new(19, 100, 0, 0, true), null);
+    Assert(p.ExpEarned == 4900 && p.Exp!.MaxLevel && p.Exp.Fraction == 1);
+    p.Update(new(19, 100, 10, 0, true), new(1, 999, 10000), counting: false);
+    Assert(p.ExpEarned == 4900 && p.SealsEarned == 400);
+    p.Start(p.Exp, p.Seals);
+    Assert(p.ExpEarned == 0 && p.SealsEarned == 0 && p.LevelsGained == 0);
+});
 Test("Client rule values separate combat, collection, escort and defense", () =>
 {
     Assert(FateRules.FromRule(1)==FateKind.Combat);
