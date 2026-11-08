@@ -240,7 +240,28 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             FoodCount = loading ? 0 : FoodCount(upkeepOptions.FoodItemId, upkeepOptions.FoodHq),
             CanUseFood = !loading && upkeepOptions.FoodItemId != 0 && CanUseItem(upkeepOptions.FoodHq ? upkeepOptions.FoodItemId + 1_000_000 : upkeepOptions.FoodItemId),
             CanSelfRepair = !loading && CanSelfRepair(), RepairBusy = RepairBusy,
+            GemstoneTrader = loading ? null : TraderActor(),
         };
+    }
+
+    private static VendorActor? TraderActor()
+    {
+        if (GemstoneTraders.In(Services.Client.TerritoryType) is not { } trader) return null;
+        var found = Services.Objects.Where(o => o.ObjectKind == ObjectKind.EventNpc && o.BaseId == trader.NpcId && o.IsTargetable).ToArray();
+        return found.Length == 1 ? new(found[0].GameObjectId, found[0].Position, found[0].HitboxRadius) : null;
+    }
+
+    // Only starts the conversation with the verified trader next to the player; never clicks in it.
+    public unsafe void TalkTo(VendorActor trader)
+    {
+        var expected = GemstoneTraders.In(Services.Client.TerritoryType);
+        var obj = Services.Objects.FirstOrDefault(o => o.GameObjectId == trader.Id);
+        var player = Services.Objects.LocalPlayer;
+        var target = FFXIVClientStructs.FFXIV.Client.Game.Control.TargetSystem.Instance();
+        if (expected == null || obj == null || obj.BaseId != expected.NpcId || !obj.IsTargetable || player == null || target == null
+            || Vector3.Distance(player.Position, obj.Position) > Math.Max(4, obj.HitboxRadius + 3))
+            throw new InvalidOperationException(L.T("O trocador de gemstones não foi confirmado. Nenhuma interação foi feita."));
+        target->InteractWithObject((NativeObject*)obj.Address, true);
     }
 
     public List<Destination> Destinations()
