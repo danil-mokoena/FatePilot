@@ -5,7 +5,13 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.3.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.3.1 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 1.3.1
+
+- **Collection FATEs hand in again.** The turn-in NPC is now also recognised as the NPC that offered the FATE (the objective NPC first, then the FATE's own NPC, then the exact NPC FatePilot started it from). When the items are ready and the turn-in NPC still cannot be identified, FatePilot stops collecting and says so in the status (with details in the log) instead of collecting forever.
+
+165 local tests pass, with zero build warnings/errors.
 
 ### New in 1.3
 
