@@ -146,8 +146,14 @@ public sealed partial class Runner
 
     private bool DefendObjective(World w, FateInfo f)
     {
-        var enemy = w.Enemies.Where(e => e.FateId == f.Id || e.TargetingPlayer)
-            .OrderByDescending(e => e.TargetingPlayer).ThenBy(e => Vector3.Distance(w.Position, e.Position)).FirstOrDefault();
+        // 1.3.2: enemies attacking this FATE's NPCs (escort, turn-in, defended NPC) count even when
+        // the game did not tag them with the FATE; they come right after anything attacking us.
+        var protectedIds = w.Objectives.Where(a => a.FateId == f.Id).Select(a => a.Id).ToHashSet();
+        bool AttacksNpc(EnemyInfo e) => e.TargetId != 0 && (protectedIds.Contains(e.TargetId) ||
+            (e.AttackingNpc && Vector3.Distance(e.Position, f.Position) <= f.Radius + 15));
+        var enemy = w.Enemies.Where(e => e.FateId == f.Id || e.TargetingPlayer || AttacksNpc(e))
+            .OrderByDescending(e => e.TargetingPlayer).ThenByDescending(AttacksNpc)
+            .ThenBy(e => Vector3.Distance(w.Position, e.Position)).FirstOrDefault();
         if (enemy == null) return false;
         runtime.StopMovement(); objectiveGoal = null;
         runtime.Target(enemy.Id); runtime.SetCombat(true);

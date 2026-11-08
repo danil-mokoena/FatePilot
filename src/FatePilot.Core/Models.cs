@@ -24,6 +24,10 @@ public readonly record struct FateKey(uint Territory, int Instance, ushort Id, l
 public sealed record EnemyInfo(ulong Id, ushort FateId, Vector3 Position, float Hitbox, bool TargetingPlayer)
 {
     public uint NameId { get; init; }
+    // 1.3.2: who this enemy is attacking (0 = nobody), so FATE NPCs under attack get defended.
+    public ulong TargetId { get; init; }
+    // The enemy is attacking a friendly NPC (not a player).
+    public bool AttackingNpc { get; init; }
 }
 
 public sealed class RunOptions
