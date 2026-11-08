@@ -93,6 +93,20 @@ public sealed partial class Runner
                 Status = L.T("Entregando itens do FATE: {0}", f.HeldItems);
                 ApproachAndInteract(w, recipient, now);
             }
+            else if (delivering && f.HeldItems > 0 && recipient == null)
+            {
+                // 1.3.1: never keep collecting silently when the items should be handed in.
+                if (!DefendObjective(w, f))
+                {
+                    runtime.SetCombat(false);
+                    Status = L.T("{0} itens prontos para entrega, mas o NPC de entrega do FATE não foi identificado.", f.HeldItems);
+                    if (now - lastStarterDiagnostic >= 10)
+                    {
+                        lastStarterDiagnostic = now;
+                        runtime.Log(Status + " " + f.ObjectiveDiagnostic);
+                    }
+                }
+            }
             else if (!w.InCombat && actors.Where(a => a.Role == ObjectiveRole.Pickup)
                          .MinBy(a => Vector3.Distance(w.Position, a.Position)) is { } pickup)
             {
