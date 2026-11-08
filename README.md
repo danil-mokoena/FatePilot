@@ -10,6 +10,7 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
 ### Fixed in 1.3.4
 
 - **Height-aware destinations.** Walkable ground is now searched at the destination's own height first (4, then 8, then 20 yalms up/down) before the wide search. Before, a single 100-yalm-tall search could pick a cave or ledge under or above the target, leaving the character stuck below it.
+- **Collection FATEs hand in by themselves.** In the conversation FatePilot opened with the verified turn-in NPC, it now fills the "Item Request" window the same way you would (open the slot, pick the offered item) and presses Hand Over. The turn-in NPC's own event is accepted as part of that conversation.
 - **Collection pickups no longer interrupt the session.** Rocks, fragments and crates of a collection FATE run their own event; that event of the verified object is now accepted as part of the interaction instead of being treated as a foreign dialogue ("The dialogue does not match the expected NPC and event").
 
 166 local tests pass, with zero build warnings/errors.
