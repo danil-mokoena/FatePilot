@@ -5,7 +5,12 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.9.0 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 0.9.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 0.9.1
+
+- **Teleporting works mounted or flying.** FatePilot used to insist on dismounting before every teleport; in the air that never succeeds, so a session started while flying sat on "Looking for eligible FATEs" forever. It now teleports straight away, like the game allows.
+- **No silent waits.** When the game really cannot teleport yet (in combat, in the middle of an action) or the navigation mesh is still loading, the status says so and the log records it once.
 
 ### New in 0.9
 
