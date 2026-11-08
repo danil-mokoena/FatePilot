@@ -161,6 +161,20 @@ Test("Escort follows its objective without the combat-only idle timeout", () =>
     r.Tick(w with{Position=new(18,0,0)},70);
     Assert(r.State==RunState.Fighting && !rt.CombatEnabled);
 });
+Test("1.3.2 escort defends its NPC from attackers the game did not tag with the FATE", () =>
+{
+    var escort=fate with{Kind=FateKind.Escort,Position=Vector3.Zero,Radius=20};
+    var w=world with{Fates=[escort],CurrentFate=1,Synced=true,Objectives=[new(503,1,ObjectiveRole.Escort,new(2,0,0))]};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    Assert(!rt.CombatEnabled);
+    var attacker=new EnemyInfo(88,0,new(4,0,0),1,false){TargetId=503,AttackingNpc=true};
+    r.Tick(w with{Enemies=[new EnemyInfo(87,0,new(1,0,0),1,false),attacker]},7);
+    Assert(rt.LastTarget==88 && rt.CombatEnabled);
+    var unknownNpc=new EnemyInfo(89,0,new(5,0,0),1,false){TargetId=777,AttackingNpc=true};
+    r.Tick(w with{Enemies=[unknownNpc, unknownNpc with{Id=90,Position=new(500,0,0)}]},8);
+    Assert(rt.LastTarget==89);
+});
 Test("Owned dialogue advances while unrelated dialogue still stops", () =>
 {
     var (r,rt)=Started(); r.Tick(world,1);
