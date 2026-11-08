@@ -109,7 +109,16 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         owned = actor;
         localDialogue.Reset();
         var nativeFate = (FateContext*)fate.Address;
-        lease.Begin(actor.Id, [0x801A0000u | actor.FateId, nativeFate->ArrayEventHandler.Id], Now);
+        // 1.3.4: FATE pickups (rocks, fragments, crates) run their own event, not the FATE
+        // director's; this verified object's own event is part of the same interaction.
+        var nativeObj = (NativeObject*)obj.Address;
+        var events = new List<uint> { 0x801A0000u | actor.FateId, nativeFate->ArrayEventHandler.Id };
+        if (actor.Role == ObjectiveRole.Pickup)
+        {
+            if (nativeObj->EventId.Id != 0) events.Add(nativeObj->EventId.Id);
+            if (nativeObj->EventHandler != null && nativeObj->EventHandler->Info.EventId.Id != 0) events.Add(nativeObj->EventHandler->Info.EventId.Id);
+        }
+        lease.Begin(actor.Id, [.. events.Distinct()], Now);
         interactionSentAt = Now;
         lastStatus = InteractionStatus.Waiting;
         lastAdvance = 0;

@@ -19,12 +19,22 @@ internal sealed class Navigation
         Stop();
         if (!Ready) throw new InvalidOperationException(L.T("A malha do módulo de navegação ainda não está pronta."));
         var start = Services.Objects.LocalPlayer?.Position ?? throw new InvalidOperationException(L.T("Personagem indisponível."));
-        var ground = pi.GetIpcSubscriber<Vector3, float, float, Vector3?>(IntegrationIds.NavigationQueryMeshNearestPointReachable)
-            .InvokeFunc(destination, 20, 100) ?? throw new InvalidOperationException(L.T("Não há ponto navegável próximo ao destino."));
+        var ground = NearestReachable(destination) ?? throw new InvalidOperationException(L.T("Não há ponto navegável próximo ao destino."));
         cancellation = new();
         fly = flying;
         pending = pi.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>(IntegrationIds.NavigationNavPathfindCancelable)
             .InvokeFunc(start, ground, flying, cancellation.Token);
+    }
+
+    // 1.3.4: look for walkable ground at the destination's own height first. A single search
+    // 100 yalms tall could pick a cave or ledge above/below the target (same X/Z, wrong floor),
+    // leaving the character under it, unable to reach it.
+    private Vector3? NearestReachable(Vector3 destination)
+    {
+        var query = pi.GetIpcSubscriber<Vector3, float, float, Vector3?>(IntegrationIds.NavigationQueryMeshNearestPointReachable);
+        foreach (var (horizontal, vertical) in new (float, float)[] { (4, 4), (10, 8), (20, 20), (20, 100) })
+            if (query.InvokeFunc(destination, horizontal, vertical) is { } point) return point;
+        return null;
     }
 
     public void Update()
