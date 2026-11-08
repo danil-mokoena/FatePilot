@@ -5,7 +5,17 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 0.9.1 experimental · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.0.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 1.0
+
+- **Route that follows your level** (Route → Route for my level): on start, on level up and on job change (the job queue included), the route is rebuilt with the zones that have the most FATEs for the job's real level — never the lower level you are synced to inside a FATE.
+- **Simulation** (the eye next to Start): shows what a session would do right now with your settings — the next step, every FATE in the zone with the reason it is or is not eligible, a timeline of decisions and the chosen FATE on the Map. Nothing is moved or clicked.
+- **Trip to the gemstone trader**: after a gemstone return (on by default) or with Inventory → Go to the trader now, FatePilot walks to the bicolor gemstone trader of the city or zone (all 24 traders, ShB to DT) and opens the conversation. Picking the shop and buying stay with you; nothing inside the conversation or shop is clicked. **Copy the exchange window data** captures that window so the purchase itself can be automated in a later version.
+- **In-game validation checklist** (Diagnostics): every feature that still needs a check in game, with how to test it, ✓/✗ marks and a copyable result.
+- **Themes for every capital** — Limsa Lominsa, Gridania, Ul'dah, Ishgard, Kugane, Rhalgr's Reach, Doman Enclave, The Crystarium, Eulmore, Old Sharlayan, Radz-at-Han, Tuliyollal, Solution Nine — plus **Classic**, the blue gradient windows of the game's Classic UI and the first Final Fantasy. Chocobo stays the default.
+
+159 local tests pass, with zero build warnings/errors.
 
 ### Fixed in 0.9.1
 

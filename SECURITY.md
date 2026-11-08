@@ -25,6 +25,9 @@ The logo, cat portrait and six language catalogs are embedded locally. Zone artw
 | Own position and facing, zone map texture and map row (scale, offsets) | Map page and optional map in the compact panel (0.9) | Drawn locally each frame from game data; nothing stored except the chosen zoom |
 | Keyboard state of the bound keys and whether a game or plugin text field is active | Keyboard shortcuts (0.9) | Polled in memory only for the combinations you bound; never logged. Shortcuts are ignored while you type |
 | Shared profile code (settings only, job queue removed) | Sharing a profile (0.9) | Clipboard only when **Copy code** or **Paste** is clicked. Imported codes are size-limited, decompressed with a cap, validated and only saved as a new profile after you confirm |
+| Gemstone trader NPC (fixed ENpc ids per zone) and the values of an open trader menu or exchange shop | Trip to the trader and **Copy the exchange window data** (1.0) | The trader is only talked to after its id is verified next to the player; nothing in the menu or shop is clicked. Window values go to the clipboard only on that button's click |
+| Job levels from the player's own level table | Route that follows the level (1.0) | Memory only; the resulting route is stored in the local configuration |
+| Validation checklist marks | Diagnostics (1.0) | Local plugin configuration; clipboard only on **Copy results** |
 | FATEs, associated NPC/object identifiers and positions, aetherytes | Target, objective and route selection | Memory; no nearby-player history |
 | Collection-item, gemstone, ticket/gil and Greens counters, bag capacity and previous target identifier | Session, restocking and restoration | Memory |
 | Verified NPC's localized sheet label and current Talk speaker label | Scope local NPC dialogue progression | Compared transiently; no dialogue body, chat history or speaker labels logged or exported |
