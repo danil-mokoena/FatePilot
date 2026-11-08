@@ -1281,7 +1281,7 @@ Test("Purchase queue: farm until the next item is affordable, buy at the trader,
 {
     var trader=GemstoneTraders.In(962)!;
     var o=Options(); o.ReturnAfterFates=0; o.Route=[zone1]; o.GemstoneDestination=new(962,182,"Old Sharlayan");
-    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Luncheon Toad Skin",Cost=2,Quantity=3}];
+    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Luncheon Toad Skin",Cost=2,Quantity=3}]; o.AutoBuyGemstones=false;
     var field=world with{Fates=[]};
     var (r,rt)=Started(field with{Gemstones=4},o);
     r.Tick(field with{Gemstones=4},1); Assert(rt.Teleports.Count==0, "4 gemstones do not cover 3 × 2");
@@ -1301,13 +1301,48 @@ Test("Purchase queue: leaving the shop without buying ends at the trader; a queu
 {
     var trader=GemstoneTraders.In(962)!;
     var o=Options(); o.ReturnAfterFates=0; o.GemstoneDestination=new(962,182,"Old Sharlayan");
-    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Toad",Cost=2,Quantity=1}];
+    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Toad",Cost=2,Quantity=1}]; o.AutoBuyGemstones=false;
     var city=world with{Territory=962,Fates=[],Gemstones=6,GemstoneTrader=new(55,trader.Position,1),Position=trader.Position};
     var (r,rt)=Started(city,o);
     r.Tick(city,1); r.Tick(city,2); Assert(r.State==RunState.Buying, r.Status);
-    r.Tick(city,20); Assert(r.State==RunState.Finished, r.Status);
+    r.Tick(city,20); Assert(r.State==RunState.Finished && rt.BuyCalls.Count==0, r.Status);
     o.GemstoneDestination=null; var fake=new Fake(); var r2=new Runner(fake); r2.Start(o,world,0);
     Assert(r2.State==RunState.Faulted, "Limsa has no gemstone trader");
+});
+
+// ---------- 1.2 ----------
+Test("Automatic purchase: asks for what the balance covers, closes the shop, then back to FATEs", () =>
+{
+    var trader=GemstoneTraders.In(962)!;
+    var o=Options(); o.ReturnAfterFates=0; o.Route=[zone1]; o.GemstoneDestination=new(962,182,"Old Sharlayan");
+    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Toad",Cost=2,Quantity=3}];
+    var city=world with{Territory=962,Fates=[],Gemstones=6,GemstoneTrader=new(55,trader.Position,1),Position=trader.Position,ItemCounts=new Dictionary<uint,int>{[500]=1}};
+    var (r,rt)=Started(city,o);
+    rt.Buy=q=>q==0 ? new("",Closed:true) : new("buying");
+    r.Tick(city,1); r.Tick(city,2); Assert(r.State==RunState.Buying && rt.Talks==1, r.Status);
+    var shop=city with{DialogueOpen=true,Occupied=true};
+    r.Tick(shop,3); Assert(rt.BuyCalls.Last()==(500u,3) && r.Status=="buying", r.Status);
+    r.Tick(shop with{ItemCounts=new Dictionary<uint,int>{[500]=3},Gemstones=2},4);
+    Assert(rt.BuyCalls.Last()==(500u,1) && r.State==RunState.Buying, "Two landed, one left");
+    r.Tick(shop with{ItemCounts=new Dictionary<uint,int>{[500]=4},Gemstones=0},5);
+    Assert(rt.BuyCalls.Last()==(500u,0) && r.State==RunState.Buying, "All bought: close, but wait for the windows");
+    r.Tick(city with{ItemCounts=new Dictionary<uint,int>{[500]=4},Gemstones=0},20);
+    Assert(r.State==RunState.Selecting && r.TakePurchases().SequenceEqual(new[]{(500u,3)}), r.Status);
+});
+Test("Automatic purchase hands over to the player when something does not match", () =>
+{
+    var trader=GemstoneTraders.In(962)!;
+    var o=Options(); o.ReturnAfterFates=0; o.GemstoneDestination=new(962,182,"Old Sharlayan");
+    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Toad",Cost=2,Quantity=1}];
+    var city=world with{Territory=962,Fates=[],Gemstones=6,GemstoneTrader=new(55,trader.Position,1),Position=trader.Position};
+    var (r,rt)=Started(city,o);
+    rt.Buy=_=>new("the shop did not open.",Manual:true);
+    r.Tick(city,1); r.Tick(city,2); r.Tick(city with{DialogueOpen=true,Occupied=true},3);
+    Assert(r.State==RunState.Buying && r.Status.Contains("the shop did not open.") && rt.Notifications.Any(n=>n.Kind==NotifyKind.Goal), r.Status);
+    var calls=rt.BuyCalls.Count; r.Tick(city with{DialogueOpen=true,Occupied=true},4);
+    Assert(rt.BuyCalls.Count==calls, "Once handed over, the plugin stops clicking");
+    r.Tick(city with{ItemCounts=new Dictionary<uint,int>{[500]=1}},20);
+    Assert(r.State==RunState.Selecting, "The player's purchase still sends the session back to FATEs");
 });
 
 // ---------- 1.0 ----------
@@ -1511,4 +1546,8 @@ sealed class Fake : IRuntime
     public bool UseGysahlGreens() { GreensUses++; return !RejectGreens; }
     public int Talks;
     public void TalkTo(VendorActor trader) => Talks++;
+    public List<(uint Item,int Quantity)> BuyCalls=[];
+    public Func<int,GemstoneBuyStep>? Buy;
+    public GemstoneBuyStep BuyGemstones(uint itemId,string name,int quantity)
+    { BuyCalls.Add((itemId,quantity)); return Buy?.Invoke(quantity) ?? new("not scripted",Manual:true); }
 }
