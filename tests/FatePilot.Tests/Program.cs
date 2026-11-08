@@ -1233,9 +1233,9 @@ Test("A FATE seen preparing and then running is one appearance and one alert", (
 });
 Test("A retry during a restock trip forgets the trip; a purchase in flight never retries", () =>
 {
-    var low=world with{GreensInventory=new(true,0,999,100000),Mounted=true};
-    var (r,rt)=Started(low,GreensOptions());
-    r.Tick(low,1); Assert(r.State==RunState.Restocking && rt.Teleports.Count==0, "Dismounting before the vendor trip");
+    var low=world with{GreensInventory=new(true,0,999,100000),Casting=true};
+    var (r,rt)=Started(low with{Casting=false},GreensOptions());
+    r.Tick(low,1); Assert(r.State==RunState.Restocking && rt.Teleports.Count==0, "Waiting for the cast before the vendor trip");
     r.Tick(low with{Territory=1001},2); Assert(r.State==RunState.Retrying);
     var stocked=world with{Territory=1001,GreensInventory=new(true,99,999,100000)};
     r.Tick(stocked,15); r.Tick(stocked,16);
@@ -1274,6 +1274,17 @@ Test("A group boss engaging the player is reported as a problem stop", () =>
     var (r,f)=Started();
     r.Tick(world with{Enemies=[new(9,196,Vector3.Zero,1,true)]},1);
     Assert(r.State==RunState.Faulted && f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped));
+});
+
+// ---------- 0.9.1 ----------
+Test("Teleport works mounted or flying, with no dismount, and a wait is never silent", () =>
+{
+    var o=Options(); o.Route=[zone1];
+    var flying=world with{Territory=1001,Mounted=true,Flying=true};
+    var (r,rt)=Started(flying,o); r.Tick(flying,1);
+    Assert(rt.Teleports.SequenceEqual(new[]{zone1}) && r.State==RunState.Teleporting, "Teleports straight from the air: "+r.Status);
+    (r,rt)=Started(world with{Territory=1001},o); r.Tick(world with{Territory=1001,Casting=true},1);
+    Assert(rt.Teleports.Count==0 && r.Status!=L.T("Procurando FATEs elegíveis."), "The wait says why: "+r.Status);
 });
 
 // ---------- 0.9 ----------
@@ -1423,4 +1434,6 @@ sealed class Fake : IRuntime
     public int GreensUses;
     public bool RejectGreens;
     public bool UseGysahlGreens() { GreensUses++; return !RejectGreens; }
+    public int Talks;
+    public void TalkTo(VendorActor trader) => Talks++;
 }
