@@ -75,6 +75,8 @@ public sealed class RunOptions
     public bool VisitGemstoneTrader { get; set; } = true;
     // 1.1: items to buy with gemstones, in order. Each one is a goal: farm, buy, back to FATEs.
     public List<GemstoneOrder> PurchaseQueue { get; set; } = [];
+    // 1.2: pick the trader's menu, find the item in the shop and confirm the exchange.
+    public bool AutoBuyGemstones { get; set; } = true;
     public bool UseTickets { get; set; }
     public bool PayGilWhenTicketsRunOut { get; set; }
     public int TicketMinimumFare { get; set; }
@@ -181,6 +183,10 @@ public sealed class GemstoneOrder
     public int Remaining => Math.Max(0, Quantity - Bought);
 }
 
+// One tick of the automatic purchase: what it is doing, whether it handed over to the player
+// (Manual, with the reason in Note) and whether the trader's windows are all closed again.
+public sealed record GemstoneBuyStep(string Note, bool Manual = false, bool Closed = false);
+
 public sealed class JobGoal
 {
     public int Gearset { get; set; }
@@ -283,4 +289,6 @@ public interface IRuntime
     void Notify(NotifyKind kind, string message);
     // Starts a conversation with the verified gemstone trader; nothing in the conversation is clicked.
     void TalkTo(VendorActor trader);
+    // Buys up to quantity of the item in the trader's open conversation; 0 closes the trader's windows.
+    GemstoneBuyStep BuyGemstones(uint itemId, string name, int quantity);
 }

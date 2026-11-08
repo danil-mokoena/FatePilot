@@ -80,15 +80,22 @@ public sealed partial class Runner
         return done;
     }
 
-    // The trader's conversation is open: the player buys, the plugin only watches the bag.
+    // The trader's conversation is open: the plugin buys (or the player, when automatic buying
+    // is off or gave up) and the bag tells when the purchase landed.
+    private bool buyingManual;
     private void BeginPurchaseWait(World w, GemstoneOrder order, double now)
     {
         try { runtime.Suspend(); } catch (Exception) { }
         buyingItem = order.ItemId;
         buyingBaseline = w.ItemCounts.GetValueOrDefault(order.ItemId);
         buyingWanted = order.Remaining;
-        Enter(RunState.Buying, L.T("Compre {0}× {1} na loja do trocador. Assim que a compra aparecer na bolsa, o FatePilot volta aos FATEs.", order.Remaining, order.Name), now);
-        Alert(NotifyKind.Goal, Status);
+        buyingManual = !options.AutoBuyGemstones;
+        if (buyingManual)
+        {
+            Enter(RunState.Buying, L.T("Compre {0}× {1} na loja do trocador. Assim que a compra aparecer na bolsa, o FatePilot volta aos FATEs.", order.Remaining, order.Name), now);
+            Alert(NotifyKind.Goal, Status);
+        }
+        else Enter(RunState.Buying, L.T("Comprando {0}× {1} no trocador.", order.Remaining, order.Name), now);
     }
 
     private void TickBuying(World w, double now)
@@ -97,7 +104,25 @@ public sealed partial class Runner
         var order = options.PurchaseQueue.FirstOrDefault(o => o.ItemId == buyingItem && o.Remaining > 0);
         var bought = Math.Max(0, w.ItemCounts.GetValueOrDefault(buyingItem) - buyingBaseline);
         if (now - since > 600) { Finish(L.T("A compra não apareceu na bolsa em 10 minutos. Sessão encerrada no trocador.")); return; }
-        // Let the player shop; decide only once the trader windows are closed.
+        if (!buyingManual)
+        {
+            var still = Math.Max(0, buyingWanted - bought);
+            var affordable = order == null ? 0 : Math.Min(still, w.Gemstones / Math.Max(1, order.Cost));
+            GemstoneBuyStep step;
+            try { step = runtime.BuyGemstones(buyingItem, order?.Name ?? "", affordable); }
+            catch (Exception ex) { step = new(ex.GetBaseException().Message, Manual: true); }
+            if (step.Manual)
+            {
+                buyingManual = true;
+                Status = L.T("A compra automática parou: {0} Compre na loja do trocador; o FatePilot volta aos FATEs quando a compra aparecer na bolsa.", step.Note);
+                runtime.Log(Status);
+                Alert(NotifyKind.Goal, Status);
+                return;
+            }
+            if (!string.IsNullOrEmpty(step.Note)) Note(step.Note);
+            if (!step.Closed) return;
+        }
+        // Decide only once the trader windows are closed.
         if (w.Occupied || w.DialogueOpen || now - since < 8) return;
         if (bought == 0) { Finish(L.T("Nada foi comprado. Sessão encerrada no trocador.")); return; }
         if (order != null) order.Bought = Math.Min(order.Quantity, order.Bought + bought);
