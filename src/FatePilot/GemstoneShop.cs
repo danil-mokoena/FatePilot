@@ -183,7 +183,7 @@ internal sealed unsafe class GemstoneShop
         for (var i = 0; i < Math.Min((int)shop->AtkValuesCount, 2000); i++)
         {
             var value = shop->AtkValues[i];
-            if (value.Type is not (AtkValueType.String or AtkValueType.ManagedString or AtkValueType.ConstString or AtkValueType.String8)) continue;
+            if (value.Type is not (AtkValueType.String or AtkValueType.ManagedString or AtkValueType.ConstString)) continue;
             string text;
             try { text = Clean(value.GetValueAsString()); } catch (Exception) { continue; }
             if (known.Contains(text) && !seen.Contains(text, StringComparer.OrdinalIgnoreCase)) seen.Add(text);

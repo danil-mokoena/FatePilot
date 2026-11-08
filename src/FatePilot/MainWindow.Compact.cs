@@ -79,12 +79,25 @@ internal sealed partial class MainWindow
 
         // Session numbers.
         ImGui.Spacing();
-        if (ImGui.BeginTable("compactStats", 3, ImGuiTableFlags.SizingStretchSame))
+        var hasSeals = Progress.Seals is { Company: > 0 };
+        if (ImGui.BeginTable("compactStats", hasSeals ? 4 : 3, ImGuiTableFlags.SizingStretchSame))
         {
             CompactStat(ItemIcon(26807), null, "Gemstones", gems);
+            if (hasSeals)
+            {
+                CompactStat(SealIcon, null, "Seals", "+" + Progress.SealsEarned.ToString("N0"));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(SealTooltip());
+            }
             CompactStat(0, FontAwesomeIcon.Stopwatch, L.T("Tempo"), TimeSpan.FromSeconds(runner.ElapsedSeconds).ToString(@"h\:mm\:ss"));
             CompactStat(ItemIcon(1), null, "Gil", (runtime.ReservedGil + runner.GreensGilCommitted).ToString("N0"));
             ImGui.EndTable();
+        }
+
+        // Experience bar for a job that is still levelling (hidden at the job's max level).
+        if (Progress.Exp is { MaxLevel: false })
+        {
+            ImGui.Spacing();
+            DrawExpBar(full);
         }
 
         // Alerts worth noticing at a glance.

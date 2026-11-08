@@ -60,7 +60,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         else ImGui.Dummy(new(size, size));
     }
 
-    private static void Stat(string id, string label, string value, uint icon)
+    private static void Stat(string id, string label, string value, uint icon, string? tooltip = null)
     {
         ImGui.TableNextColumn();
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(10, 8) * ImGuiHelpers.GlobalScale);
@@ -73,6 +73,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         GameIcon(icon, 24); ImGui.SameLine(); ImGui.AlignTextToFramePadding(); ImGui.TextColored(Gold, value);
         ImGui.TextDisabled(label);
         ImGui.EndChild(); ImGui.PopStyleVar();
+        if (tooltip != null && ImGui.IsItemHovered()) ImGui.SetTooltip(tooltip);
     }
 
     private static void PushTheme()
@@ -138,14 +139,25 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     {
         DrawSummary();
         if (Simulating) DrawSimulation(); else DrawNextStep();
-        if (ImGui.BeginTable("sessionStats", 4, ImGuiTableFlags.SizingStretchSame))
+        if (ImGui.BeginTable("sessionStats", 3, ImGuiTableFlags.SizingStretchSame))
         {
             Stat("complete", L.T("FATEs concluídos"), runner.Completed.ToString(), 60721);
-            var perHour = runner.ElapsedSeconds >= 300 ? $"  ·  {runner.GemstonesEarned * 3600 / runner.ElapsedSeconds:N0}/h" : "";
-            Stat("gemstones", L.T("Gemstones obtidas"), runner.GemstonesEarned.ToString("N0") + perHour, ItemIcon(26807));
+            Stat("gemstones", L.T("Gemstones obtidas"), runner.GemstonesEarned.ToString("N0") + PerHour(runner.GemstonesEarned), ItemIcon(26807));
+            var exp = Progress.Exp;
+            Stat("exp", L.T("EXP obtida"), exp is { MaxLevel: true } ? L.T("Nível máximo") : Progress.ExpEarned.ToString("N0") + PerHour(Progress.ExpEarned),
+                ProgressReader.ExpIcon, ExpTooltip());
+            var seals = Progress.Seals;
+            Stat("seals", L.T("Seals obtidos"), seals is { Company: 0 } ? L.T("Sem Grand Company") : Progress.SealsEarned.ToString("N0") + PerHour(Progress.SealsEarned),
+                SealIcon, SealTooltip());
             Stat("zones", L.T("Zonas na rota"), config.Options.Route.Count.ToString(), AetheryteIcon);
             Stat("gil", L.T("Gil comprometido"), (runtime.ReservedGil + runner.GreensGilCommitted).ToString("N0"), ItemIcon(1));
             ImGui.EndTable();
+        }
+        if (Progress.Exp is { MaxLevel: false })
+        {
+            BeginCard("expBar");
+            DrawExpBar(CardWidth());
+            EndCard();
         }
         if (runner.Unconfirmed > 0) ImGui.TextDisabled(L.T("Concluídos: {0}  |  Sem confirmação: {1}", runner.Completed, runner.Unconfirmed));
         ImGui.Spacing();

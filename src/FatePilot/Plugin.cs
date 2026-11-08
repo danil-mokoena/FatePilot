@@ -173,6 +173,11 @@ public sealed class Plugin : IDalamudPlugin
             var oldState = runner.State;
             runtime.ValidateControl();
             runner.Tick(world, now);
+            // 1.3: experience and seals earned this session.
+            var exp = ProgressReader.Exp();
+            var seals = ProgressReader.Seals();
+            if (runner.IsRunning && !wasRunning) window.Progress.Start(exp, seals);
+            else window.Progress.Update(exp, seals, runner.IsRunning);
             // Purchases seen by the session are marked in the saved queue too.
             var bought = runner.TakePurchases();
             foreach (var (item, quantity) in bought)
