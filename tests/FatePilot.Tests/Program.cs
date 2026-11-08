@@ -1276,6 +1276,47 @@ Test("A group boss engaging the player is reported as a problem stop", () =>
     Assert(r.State==RunState.Faulted && f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped));
 });
 
+// ---------- 1.0 ----------
+Test("A trader trip walks to the zone's trader, opens the talk once and hands control back", () =>
+{
+    var trader=GemstoneTraders.In(1189)!;
+    var w=world with{Territory=1189,Fates=[],GemstoneTrader=new(55,trader.Position,1)};
+    var fake=new Fake(); var r=new Runner(fake);
+    r.StartTraderTrip(Options(),w,0); r.Tick(w,1);
+    Assert(r.State==RunState.ToTrader && fake.Teleports.Count==0, r.Status);
+    r.Tick(w,2); Assert(fake.Moves==1 && fake.Talks==0);
+    r.Tick(w with{Position=trader.Position},3);
+    Assert(fake.Talks==1 && r.State==RunState.Finished && !r.IsRunning, r.Status);
+    fake=new Fake(); r=new Runner(fake);
+    r.StartTraderTrip(Options(),world,0);
+    Assert(r.State==RunState.Faulted && fake.Teleports.Count==0, "No trader here and no trader city chosen");
+});
+Test("A gemstone return goes on to the trader when the option is on", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0; o.ReturnAfterGemstones=10; o.GemstoneDestination=new(962,182,"Old Sharlayan");
+    var (r,rt)=Started(world,o);
+    r.Tick(world with{Gemstones=10},1); Assert(rt.Teleports.SequenceEqual(new[]{o.GemstoneDestination}));
+    r.Tick(world with{Loading=true},2);
+    r.Tick(world with{Territory=962,Fates=[],Gemstones=10},3);
+    Assert(r.State==RunState.ToTrader, r.Status);
+    o.VisitGemstoneTrader=false; (r,rt)=Started(world,o);
+    r.Tick(world with{Gemstones=10},1); r.Tick(world with{Loading=true},2); r.Tick(world with{Territory=962,Fates=[],Gemstones=10},3);
+    Assert(r.State==RunState.Finished, "Off: the return ends at the aetheryte");
+});
+Test("Simulation shows the next step and why each FATE is or is not eligible", () =>
+{
+    var o=Options(); o.Route=[zone2];
+    Assert(SessionPreview.Next(world,o,new ZoneHistory()).Action==PreviewAction.Teleport);
+    o.Route=[zone1];
+    var step=SessionPreview.Next(world,o,new ZoneHistory());
+    Assert(step.Action==PreviewAction.GoToFate && step.Fate?.Id==1, step.Text);
+    var none=new Dictionary<FateKey,double>();
+    Assert(Selection.Check(fate with{Level=200},world,o,none,0)==FateSkip.TooHigh);
+    o.ExcludedFates=[1]; Assert(Selection.Check(fate,world,o,none,0)==FateSkip.Ignored && Selection.Choose(world,o,none,0)==null);
+    var log=new SimulationLog();
+    Assert(log.Observe(step,DateTime.Now) && !log.Observe(step with{Text="moved closer"},DateTime.Now) && log.Entries.Count==1, "Same decision, one line");
+});
+
 // ---------- 0.9.1 ----------
 Test("Teleport works mounted or flying, with no dismount, and a wait is never silent", () =>
 {
