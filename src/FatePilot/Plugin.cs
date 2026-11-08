@@ -58,6 +58,28 @@ public sealed class Plugin : IDalamudPlugin
         else Services.Chat.Print("/fatepilot | start | stop | pause | resume | toggle | skip | status | recover");
     }
 
+    private static RunOptions Clone(RunOptions o) => JsonSerializer.Deserialize<RunOptions>(JsonSerializer.Serialize(o))!;
+
+    // 1.0: keep the route on the best zones for the current job's real level (never the synced
+    // level inside a FATE). Rebuilt when the job or its level changes, and right before a start.
+    private (uint Job, int Level) levelKey;
+    private void FollowLevelRoute(World world, bool force)
+    {
+        if (!config.Options.FollowLevelRoute || !world.LoggedIn || world.Loading || world.Job == 0) return;
+        var level = GameRuntime.JobLevel(world.Job);
+        if (level <= 0 || (!force && levelKey == (world.Job, level))) return;
+        var catalog = window.LevelCatalog;
+        catalog.EnsureBuilt();
+        if (!catalog.Ready || window.Destinations.Count == 0) return;
+        levelKey = (world.Job, level);
+        var best = catalog.Best(level, config.Options.LevelAbovePlayer, window.Destinations).Select(z => z.Destination).ToList();
+        if (best.Count == 0 || best.Select(d => d.TerritoryId).SequenceEqual(config.Options.Route.Select(d => d.TerritoryId))) return;
+        config.Options.Route = best;
+        config.Save();
+        runtime.Log(L.T("Nível {0}: rota atualizada para {1}.", level, string.Join(", ", best.Select(d => d.Name))));
+        if (runner.IsRunning) runner.QueueOptions(Clone(config.Options));
+    }
+
     // 0.9 keyboard shortcuts: polled every frame (presses are short), never while typing.
     private void PollHotkeys()
     {
@@ -82,7 +104,7 @@ public sealed class Plugin : IDalamudPlugin
         return atk == null || atk->IsTextInputActive();
     }
 
-    private void Request(string action) => requests.Enqueue((action, action is "confirm-start" or "settings"
+    private void Request(string action) => requests.Enqueue((action, action is "confirm-start" or "confirm-trip" or "settings"
         ? JsonSerializer.Deserialize<RunOptions>(JsonSerializer.Serialize(config.Options))! : null));
 
     private void Update(IFramework framework)
@@ -118,8 +140,18 @@ public sealed class Plugin : IDalamudPlugin
                     case "start":
                         if (startConfirmation.Request(runner.IsRunning)) window.PromptStart();
                         break;
+                    case "start-trip":
+                        if (startConfirmation.Request(runner.IsRunning)) window.PromptStart(trip: true);
+                        break;
                     case "confirm-start":
-                        if (startConfirmation.Confirm(runner.IsRunning)) runner.Start(request.Options!, world, now);
+                        if (startConfirmation.Confirm(runner.IsRunning))
+                        {
+                            FollowLevelRoute(world, true);
+                            runner.Start(config.Options.FollowLevelRoute ? Clone(config.Options) : request.Options!, world, now);
+                        }
+                        break;
+                    case "confirm-trip":
+                        if (startConfirmation.Confirm(runner.IsRunning)) runner.StartTraderTrip(request.Options!, world, now);
                         break;
                     case "cancel-start": startConfirmation.Cancel(); break;
                     case "settings": runner.QueueOptions(request.Options!); break;
@@ -137,6 +169,7 @@ public sealed class Plugin : IDalamudPlugin
                     case "check-deps": window.Dependencies = runtime.Dependencies(); window.DependenciesCheckedAt = DateTime.Now; break;
                 }
             }
+            FollowLevelRoute(world, false);
             var oldState = runner.State;
             runtime.ValidateControl();
             runner.Tick(world, now);

@@ -144,8 +144,27 @@ internal sealed partial class MainWindow
             ImGui.EndCombo();
         }
         Help(L.T("Usada quando a volta é causada por gemstones (saldo ou meta de gemstones). As outras metas usam a cidade de retorno da Sessão."));
+        ImGui.Spacing();
+        var visit = o.VisitGemstoneTrader;
+        if (ImGui.Checkbox(L.T("Ao voltar por gemstones, ir até o trocador e abrir a conversa"), ref visit)) { o.VisitGemstoneTrader = visit; SaveSettings(); }
+        Help(L.T("O FatePilot anda até o trocador da cidade e abre a conversa. Escolher a loja e comprar fica com você: nada dentro da conversa ou da loja é clicado."));
+        var here = GemstoneTraders.In(World.Territory) != null;
+        ImGui.BeginDisabled(runner.IsRunning);
+        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Store, L.T("Ir ao trocador agora"))) request("start-trip");
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        ImGui.TextDisabled(here ? L.T("Trocador nesta zona.") : L.T("Teleporta para a cidade escolhida acima."));
+        if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Clipboard, L.T("Copiar dados da janela de troca")))
+        {
+            var data = GameRuntime.DescribeTraderWindows();
+            traderCopy = data.Length > 0 ? L.T("Copiado. Cole na conversa para automatizarmos a compra.") : L.T("Abra o menu ou a loja do trocador primeiro.");
+            if (data.Length > 0) ImGui.SetClipboardText(data);
+        }
+        if (traderCopy.Length > 0) { ImGui.SameLine(); ImGui.TextDisabled(traderCopy); }
         EndCard();
     }
+
+    private string traderCopy = "";
 
     private static string FoodLabel(FoodChoice f) => f.Name + (f.Hq ? " (HQ)" : "") + $"  ×{f.Count}";
 

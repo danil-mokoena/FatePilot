@@ -173,7 +173,9 @@ internal sealed partial class MainWindow
             draw.AddCircleFilled(h, 3.5f * scale, U32(Gold));
         }
         // Path to the current FATE.
-        var selected = runner.Selected is { } s && s.TerritoryId == World.Territory ? s : null;
+        // The running session's FATE, or the one the simulation would pick.
+        var active = runner.Selected ?? (Simulating ? simulationStep?.Fate : null);
+        var selected = active is { } s && s.TerritoryId == World.Territory ? s : null;
         if (selected != null) draw.AddLine(Screen(me), Screen(selected.Position), U32(Gold with { W = .75f }), 2 * scale);
         // Aetheryte.
         if (World.NearbyAetheryte is { } aetheryte) DrawIconAt(draw, AetheryteIcon, Screen(aetheryte), (detailed ? 24 : 18) * scale);

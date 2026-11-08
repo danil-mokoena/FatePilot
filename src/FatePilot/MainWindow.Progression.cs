@@ -11,6 +11,7 @@ namespace FatePilot;
 internal sealed partial class MainWindow
 {
     private readonly FateLevelCatalog levelCatalog = new();
+    internal FateLevelCatalog LevelCatalog => levelCatalog;
 
     // Replace the route with the best unlocked zones for this level.
     private bool ApplyLevelRoute(int level)
@@ -31,7 +32,12 @@ internal sealed partial class MainWindow
         BeginCard("levelRoute");
         CardTitle(FontAwesomeIcon.ChartLine, L.T("Rota para o meu nível"));
         if (!levelCatalog.Ready) { EmptyState(FontAwesomeIcon.Hourglass, L.T("Lendo os FATEs de cada zona nos dados do jogo…")); EndCard(); return; }
-        var level = World.Level;
+        var real = World.Job != 0 ? GameRuntime.JobLevel(World.Job) : 0;
+        var level = real > 0 ? real : World.Level;
+        var follow = config.Options.FollowLevelRoute;
+        if (ImGui.Checkbox(L.T("Atualizar a rota sozinho quando o nível ou a classe mudar"), ref follow)) { config.Options.FollowLevelRoute = follow; SaveSettings(); }
+        Help(L.T("Ao iniciar, ao subir de nível e ao trocar de classe (inclusive pela fila de classes), a rota é refeita com estas zonas. Usa o nível real da classe, não o nível sincronizado do FATE."));
+        ImGui.Spacing();
         var (min, max) = FateLevelCatalog.Band(level, config.Options.LevelAbovePlayer);
         GameIcon(JobIcon(World.Job), 26); ImGui.SameLine(); ImGui.AlignTextToFramePadding();
         ImGui.TextUnformatted(L.T("Nível {0} · FATEs do nível {1} ao {2}", level, min, max));

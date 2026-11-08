@@ -27,5 +27,7 @@ public sealed class Configuration : IPluginConfiguration
     public float MapRadius { get; set; } = 250f;
     public bool CompactMap { get; set; }
     public List<HotkeyBinding> Hotkeys { get; set; } = [];
+    // 1.0: in-game validation checklist (0 = not checked, 1 = works, 2 = problem).
+    public Dictionary<string, int> Checklist { get; set; } = [];
     public void Save() => Services.Plugin.SavePluginConfig(this);
 }

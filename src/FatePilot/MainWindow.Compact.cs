@@ -34,7 +34,7 @@ internal sealed partial class MainWindow
         {
             const ImGuiWindowFlags flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse
                 | ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoScrollWithMouse;
-            if (ImGui.Begin("FatePilot###FatePilotCompact", flags)) DrawCompact();
+            if (ImGui.Begin("FatePilot###FatePilotCompact", flags)) { PaintClassicBackground(false); DrawCompact(); }
             ImGui.End();
         }
         finally { ImGui.PopStyleColor(20); ImGui.PopStyleVar(5); }

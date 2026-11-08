@@ -11,11 +11,11 @@ internal sealed partial class MainWindow
 {
     private enum Page { Session, Route, Fates, Map, Achievements, Jobs, Inventory, Supplies, Tracker, Diagnostics, About, Settings }
     private Page page;
-    private bool startPrompt, openStartPopup;
+    private bool startPrompt, openStartPopup, tripPrompt;
     private static readonly Stack<(Vector2 Origin, float Width)> cards = new();
 
-    public void PromptStart() { open = true; startPrompt = openStartPopup = true; }
-    public void CancelStart() { startPrompt = openStartPopup = false; }
+    public void PromptStart(bool trip = false) { open = true; startPrompt = openStartPopup = true; tripPrompt = trip; simulating = false; }
+    public void CancelStart() { startPrompt = openStartPopup = tripPrompt = false; }
 
     private void DrawShell()
     {
@@ -233,7 +233,8 @@ internal sealed partial class MainWindow
             var spacing = ImGui.GetStyle().ItemSpacing.X;
             var controlsWidth = ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Play, L.T("Iniciar"))
                 + ImGuiComponents.GetIconButtonWithTextWidth(FontAwesomeIcon.Stop, L.T("Parar")) + spacing
-                + (runner.IsRunning ? (IconButtonWidth(FontAwesomeIcon.Pause) + IconButtonWidth(FontAwesomeIcon.FlagCheckered) + IconButtonWidth(FontAwesomeIcon.CompressAlt)) * 1.2f + spacing * 3 : 0);
+                + (runner.IsRunning ? (IconButtonWidth(FontAwesomeIcon.Pause) + IconButtonWidth(FontAwesomeIcon.FlagCheckered) + IconButtonWidth(FontAwesomeIcon.CompressAlt)) * 1.2f + spacing * 3
+                    : IconButtonWidth(FontAwesomeIcon.Eye) * 1.2f + spacing);
             ImGui.TableSetupColumn("controls", ImGuiTableColumnFlags.WidthFixed, controlsWidth);
             ImGui.TableNextColumn();
             StatusDot(Error != null ? Danger : runner.IsPaused ? Gold : runner.IsRunning ? Success : Muted, runner.IsRunning && !runner.IsPaused && Error == null);
@@ -253,6 +254,15 @@ internal sealed partial class MainWindow
             ImGui.BeginDisabled(!runner.IsRunning && !startPrompt);
             if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Stop, L.T("Parar") + "###stop")) request("stop");
             ImGui.EndDisabled();
+            if (!runner.IsRunning)
+            {
+                ImGui.SameLine();
+                var on = simulating;
+                if (on) PushPrimaryButton();
+                if (ImGuiComponents.IconButton(FontAwesomeIcon.Eye)) { ToggleSimulation(); page = Page.Session; }
+                if (on) ImGui.PopStyleColor(4);
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(on ? L.T("Encerrar a simulação") : L.T("Simular: ver o que a sessão faria, sem mover nem clicar nada"));
+            }
             if (runner.IsRunning)
             {
                 ImGui.SameLine();
@@ -283,6 +293,7 @@ internal sealed partial class MainWindow
             ImGui.EndTable();
         }
         if (Error != null) { ImGui.PushStyleColor(ImGuiCol.Text, Danger); ImGui.TextWrapped(Error); ImGui.PopStyleColor(); }
+        else if (Simulating && simulationStep != null) { Chip(L.T("Simulação"), Gold); ImGui.SameLine(); ImGui.TextWrapped(simulationStep.Text); }
         else ImGui.TextWrapped(runner.Status);
         if (runner.Selected is { } active)
         {
@@ -348,7 +359,7 @@ internal sealed partial class MainWindow
                 PushPrimaryButton();
                 var confirmed = ImGui.Button(L.T("Entendi, iniciar") + "###confirmStart");
                 ImGui.PopStyleColor(4);
-                if (confirmed) { startPrompt = false; request("confirm-start"); ImGui.CloseCurrentPopup(); }
+                if (confirmed) { startPrompt = false; request(tripPrompt ? "confirm-trip" : "confirm-start"); ImGui.CloseCurrentPopup(); }
                 ImGui.SameLine();
                 if (ImGui.Button(L.T("Cancelar") + "###cancelStart"))
                 { startPrompt = false; request("cancel-start"); ImGui.CloseCurrentPopup(); }

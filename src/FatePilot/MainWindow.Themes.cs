@@ -29,14 +29,44 @@ internal sealed record UiTheme(string Key, string Name,
             C(accent * 1.13f), C(accent * .71f), C(accent * .85f), C(accent * .96f));
     }
 
+    // Classic: the game's blue "Classic" window look (and the first Final Fantasy menus) — a vertical
+    // blue gradient, light thin borders, white text and gold selections.
+    public bool Classic { get; init; }
+    public Vector4 GradientTop { get; init; }
+    public Vector4 GradientBottom { get; init; }
+
+    private static UiTheme ClassicTheme() => Derive("classic", "Classic", new(.04f, .08f, .28f), new(.95f, .84f, .55f)) with
+    {
+        Classic = true,
+        GradientTop = new(.13f, .24f, .58f, .98f),
+        GradientBottom = new(.03f, .07f, .26f, .98f),
+        Window = new(.03f, .07f, .26f, .98f),
+        Child = new(0, 0, 0, .14f),
+        Frame = new(.06f, .12f, .36f, .9f),
+        Button = new(.14f, .25f, .58f, 1),
+        Border = new(.72f, .80f, .98f, .85f),
+        Tab = new(.08f, .15f, .42f, 1),
+        TitleBg = new(.08f, .16f, .45f, 1),
+        TitleActive = new(.12f, .22f, .55f, 1),
+    };
+
     public static readonly UiTheme[] All =
     [
         Chocobo,
-        Derive("ishgard", "Ishgard", new(.05f, .065f, .095f), new(.64f, .80f, .96f)),
-        Derive("gridania", "Gridania", new(.05f, .075f, .06f), new(.62f, .86f, .52f)),
+        ClassicTheme(),
         Derive("limsa", "Limsa Lominsa", new(.04f, .065f, .085f), new(.42f, .82f, .86f)),
+        Derive("gridania", "Gridania", new(.05f, .075f, .06f), new(.62f, .86f, .52f)),
         Derive("uldah", "Ul'dah", new(.085f, .065f, .05f), new(.98f, .64f, .32f)),
-        Derive("sharlayan", "Sharlayan", new(.06f, .055f, .09f), new(.75f, .65f, .98f)),
+        Derive("ishgard", "Ishgard", new(.05f, .065f, .095f), new(.64f, .80f, .96f)),
+        Derive("kugane", "Kugane", new(.07f, .04f, .05f), new(.92f, .40f, .44f)),
+        Derive("rhalgr", "Rhalgr's Reach", new(.08f, .06f, .03f), new(.98f, .78f, .30f)),
+        Derive("doma", "Doman Enclave", new(.04f, .07f, .06f), new(.36f, .80f, .62f)),
+        Derive("crystarium", "The Crystarium", new(.04f, .05f, .10f), new(.52f, .70f, 1f)),
+        Derive("eulmore", "Eulmore", new(.08f, .05f, .07f), new(.95f, .66f, .72f)),
+        Derive("sharlayan", "Old Sharlayan", new(.06f, .055f, .09f), new(.75f, .65f, .98f)),
+        Derive("radz", "Radz-at-Han", new(.06f, .05f, .04f), new(.30f, .85f, .78f)),
+        Derive("tuliyollal", "Tuliyollal", new(.08f, .05f, .04f), new(.95f, .55f, .38f)),
+        Derive("solution9", "Solution Nine", new(.03f, .04f, .07f), new(.30f, .92f, .98f)),
     ];
 
     public static UiTheme Find(string? key) => All.FirstOrDefault(t => t.Key == key) ?? Chocobo;
@@ -47,6 +77,17 @@ internal sealed partial class MainWindow
     private static UiTheme theme = UiTheme.Chocobo;
     private static Vector4 Gold => theme.Accent;
     private static uint U32(Vector4 color) => ImGui.ColorConvertFloat4ToU32(color);
+
+    // Classic theme: paint the blue gradient behind the window content (below the title bar).
+    private static void PaintClassicBackground(bool hasTitleBar)
+    {
+        if (!theme.Classic) return;
+        var p0 = ImGui.GetWindowPos() + new Vector2(0, hasTitleBar ? ImGui.GetFrameHeight() : 0);
+        var p1 = ImGui.GetWindowPos() + ImGui.GetWindowSize();
+        ImGui.PushClipRect(p0, p1, false);
+        ImGui.GetWindowDrawList().AddRectFilledMultiColor(p0, p1, U32(theme.GradientTop), U32(theme.GradientTop), U32(theme.GradientBottom), U32(theme.GradientBottom));
+        ImGui.PopClipRect();
+    }
 
     private void DrawAppearanceSettings()
     {
@@ -77,7 +118,8 @@ internal sealed partial class MainWindow
         var draw = ImGui.GetWindowDrawList();
         var r = 8 * scale;
         var label = ImGui.GetTextLineHeight() + 10 * scale;
-        draw.AddRectFilled(p0, p0 + size, U32(t.Window with { W = 1 }), r);
+        if (t.Classic) draw.AddRectFilledMultiColor(p0, p0 + size, U32(t.GradientTop), U32(t.GradientTop), U32(t.GradientBottom), U32(t.GradientBottom));
+        else draw.AddRectFilled(p0, p0 + size, U32(t.Window with { W = 1 }), r);
         // Sidebar strip with a selected item.
         draw.AddRectFilled(p0 + new Vector2(7, 7) * scale, p0 + new Vector2(28 * scale, size.Y - label), U32(t.Child), 4 * scale);
         draw.AddRectFilled(p0 + new Vector2(7, 14) * scale, p0 + new Vector2(9, 22) * scale, U32(t.Accent));

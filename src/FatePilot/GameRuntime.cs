@@ -244,6 +244,36 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         };
     }
 
+    // The job's real level from the player's level table (the synced level inside a FATE is lower).
+    public static unsafe int JobLevel(uint job)
+    {
+        var state = PlayerState.Instance();
+        var row = Services.Data.GetExcelSheet<ClassJob>().GetRowOrDefault(job);
+        if (state == null || row == null) return 0;
+        var index = row.Value.ExpArrayIndex;
+        return index >= 0 && index < state->ClassJobLevels.Length ? state->ClassJobLevels[index] : 0;
+    }
+
+    // Visible trader menus and exchange shops, as raw values, for the "copy window data" button.
+    public static unsafe string DescribeTraderWindows()
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var name in new[] { "SelectString", "SelectIconString", "ShopExchangeCurrency", "ShopExchangeItem", "InclusionShop" })
+        {
+            var addon = (FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase*)Services.GameGui.GetAddonByName(name).Address;
+            if (addon == null || !addon->IsVisible) continue;
+            text.AppendLine($"[{name}] values={addon->AtkValuesCount}");
+            for (var i = 0; i < Math.Min((int)addon->AtkValuesCount, 600); i++)
+            {
+                var value = addon->AtkValues[i];
+                string shown;
+                try { shown = value.GetValueAsString(); } catch (Exception) { shown = "?"; }
+                text.AppendLine($"{i}\t{value.Type}\t{shown}");
+            }
+        }
+        return text.Length == 0 ? "" : "FatePilot trader windows\n" + text;
+    }
+
     private static VendorActor? TraderActor()
     {
         if (GemstoneTraders.In(Services.Client.TerritoryType) is not { } trader) return null;

@@ -35,6 +35,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     public void Draw()
     {
         theme = UiTheme.Find(config.Theme);
+        UpdateSimulation();
         if (!open) capturingHotkey = null;
         SyncCompactMode();
         if (compact && runner.IsRunning) DrawCompactWindow();
@@ -45,7 +46,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         PushTheme();
         try
         {
-            if (ImGui.Begin("FatePilot###FatePilotMain", ref open, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) DrawShell();
+            if (ImGui.Begin("FatePilot###FatePilotMain", ref open, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse)) { PaintClassicBackground(true); DrawShell(); }
             ImGui.End();
             if (!open && startPrompt) { CancelStart(); request("cancel-start"); }
             if (!open && runner.IsRunning) compact = true; // closing the full window mid-session falls back to the panel
@@ -136,7 +137,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
     private void DrawSession()
     {
         DrawSummary();
-        DrawNextStep();
+        if (Simulating) DrawSimulation(); else DrawNextStep();
         if (ImGui.BeginTable("sessionStats", 4, ImGuiTableFlags.SizingStretchSame))
         {
             Stat("complete", L.T("FATEs concluídos"), runner.Completed.ToString(), 60721);
@@ -464,6 +465,7 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
 
     private void DrawDiagnostics()
     {
+        DrawChecklist();
         BeginCard("integrations");
         CardTitle(FontAwesomeIcon.Plug, L.T("Integrações"));
         DrawDependencyList();
