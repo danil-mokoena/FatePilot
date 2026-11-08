@@ -5,7 +5,13 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.3.1 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.3.2 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 1.3.2
+
+- **Escort and defence FATEs protect their NPC.** Enemies attacking the escorted NPC (or any friendly NPC inside the FATE area) are now fought right after anything attacking you, even when the game did not tag them with the FATE. Before, those attackers were ignored and FatePilot could stand next to the NPC while it was being beaten.
+
+166 local tests pass, with zero build warnings/errors.
 
 ### Fixed in 1.3.1
 
