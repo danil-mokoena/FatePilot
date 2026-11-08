@@ -5,7 +5,14 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.3.3 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.3.4 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 1.3.4
+
+- **Height-aware destinations.** Walkable ground is now searched at the destination's own height first (4, then 8, then 20 yalms up/down) before the wide search. Before, a single 100-yalm-tall search could pick a cave or ledge under or above the target, leaving the character stuck below it.
+- **Collection pickups no longer interrupt the session.** Rocks, fragments and crates of a collection FATE run their own event; that event of the verified object is now accepted as part of the interaction instead of being treated as a foreign dialogue ("The dialogue does not match the expected NPC and event").
+
+166 local tests pass, with zero build warnings/errors.
 
 ### Fixed in 1.3.3
 
