@@ -37,6 +37,7 @@ internal sealed partial class GameRuntime
     {
         var missing = Dependencies().Where(x => !x.Available).Select(x => x.Name).ToList();
         if (missing.Count > 0) throw new InvalidOperationException(L.T("API indisponível: ") + string.Join(", ", missing));
+        gemstoneShop.Reset();
         combat.Begin();
         session = true;
     }

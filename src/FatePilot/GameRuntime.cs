@@ -20,6 +20,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
     private readonly Travel travel;
     private readonly EventInteraction interaction;
     private readonly GreensShop greensShop = new();
+    private readonly GemstoneShop gemstoneShop = new();
     private bool session, ownsTravelService, companionEnabled;
     private ulong previousTarget, ownedTarget;
     private readonly Queue<string> messages = new();
@@ -124,6 +125,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         void Attempt(Action action) { try { action(); } catch (Exception ex) { errors.Add(ex.Message); } }
         Attempt(greensShop.Close);
         greensShop.Reset();
+        gemstoneShop.Reset();
         Attempt(nav.Stop);
         Attempt(combat.End);
         Attempt(travel.End);
@@ -211,7 +213,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         {
             LoggedIn = Services.Client.IsLoggedIn, Loading = loading, Dead = player.IsDead,
             Restricted = Services.Client.IsPvP || c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95],
-            Occupied = occupied, DialogueOpen = EventInteraction.DialogueOpen || GreensShop.IsOpen,
+            Occupied = occupied, DialogueOpen = EventInteraction.DialogueOpen || GreensShop.IsOpen || GemstoneShop.IsOpen,
             InteractionDiagnostic = occupied || EventInteraction.DialogueOpen ?
                 $"occupied={c[ConditionFlag.Occupied]}; questEvent={c[ConditionFlag.OccupiedInQuestEvent]}; event={c[ConditionFlag.OccupiedInEvent]}; cutscene={c[ConditionFlag.OccupiedInCutSceneEvent] || c[ConditionFlag.WatchingCutscene]}; dialog={EventInteraction.DialogueOpen}; lease={interactionStatus}" : null,
             Casting = player.IsCasting || c[ConditionFlag.MountOrOrnamentTransition],
@@ -292,18 +294,11 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         return found.Length == 1 ? new(found[0].GameObjectId, found[0].Position, found[0].HitboxRadius) : null;
     }
 
-    // Only starts the conversation with the verified trader next to the player; never clicks in it.
-    public unsafe void TalkTo(VendorActor trader)
-    {
-        var expected = GemstoneTraders.In(Services.Client.TerritoryType);
-        var obj = Services.Objects.FirstOrDefault(o => o.GameObjectId == trader.Id);
-        var player = Services.Objects.LocalPlayer;
-        var target = FFXIVClientStructs.FFXIV.Client.Game.Control.TargetSystem.Instance();
-        if (expected == null || obj == null || obj.BaseId != expected.NpcId || !obj.IsTargetable || player == null || target == null
-            || Vector3.Distance(player.Position, obj.Position) > Math.Max(4, obj.HitboxRadius + 3))
-            throw new InvalidOperationException(L.T("O trocador de gemstones não foi confirmado. Nenhuma interação foi feita."));
-        target->InteractWithObject((NativeObject*)obj.Address, true);
-    }
+    // Starts the conversation with the verified trader next to the player; GemstoneShop then
+    // only acts inside that conversation.
+    public void TalkTo(VendorActor trader) { gemstoneShop.Reset(); gemstoneShop.TalkTo(trader); }
+
+    public GemstoneBuyStep BuyGemstones(uint itemId, string name, int quantity) => gemstoneShop.Step(itemId, name, quantity);
 
     public List<Destination> Destinations()
     {

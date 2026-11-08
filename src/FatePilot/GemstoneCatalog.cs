@@ -3,10 +3,13 @@ using Lumina.Excel.Sheets;
 
 namespace FatePilot;
 
-public sealed record GemstoneItem(uint ItemId, string Name, uint Icon, int Cost);
+// Coarse shelves for the picker's filter chips, from the item's FilterGroup.
+public enum GemstoneShelf { Materials, Housing, Orchestrion, Gear, Other }
+
+public sealed record GemstoneItem(uint ItemId, string Name, uint Icon, int Cost, GemstoneShelf Shelf, string Category, uint CategoryIcon, int StackSize, bool Unique);
 
 // Items a gemstone trader sells for bicolor gemstones, read from the client's FateShop and
-// SpecialShop sheets (in the client's language). Cached per trader.
+// SpecialShop sheets (in the client's language). Cached per trader, in shop order.
 internal static class GemstoneCatalog
 {
     private const uint BicolorGemstone = 26807;
@@ -30,9 +33,20 @@ internal static class GemstoneCatalog
                     var cost = entry.ItemCosts.FirstOrDefault(c => c.ItemCost.RowId == BicolorGemstone);
                     if (receive.Item.RowId == 0 || cost.CurrencyCost == 0 || receive.ReceiveCount != 1) continue;
                     if (list.Any(i => i.ItemId == receive.Item.RowId) || items.GetRowOrDefault(receive.Item.RowId) is not { } item) continue;
-                    list.Add(new(item.RowId, item.Name.ExtractText(), item.Icon, (int)cost.CurrencyCost));
+                    var category = item.ItemUICategory.ValueNullable;
+                    list.Add(new(item.RowId, item.Name.ExtractText(), item.Icon, (int)cost.CurrencyCost, Shelf(item),
+                        category?.Name.ExtractText() ?? "", (uint)(category?.Icon ?? 0), (int)Math.Max(1, item.StackSize), item.IsUnique));
                 }
             }
-        return cache[trader.NpcId] = list.OrderBy(i => i.Name).ToList();
+        return cache[trader.NpcId] = list;
     }
+
+    private static GemstoneShelf Shelf(Item item) => item.FilterGroup switch
+    {
+        12 => GemstoneShelf.Materials,
+        14 => GemstoneShelf.Housing,
+        32 => GemstoneShelf.Orchestrion,
+        >= 1 and <= 4 => GemstoneShelf.Gear,
+        _ => GemstoneShelf.Other,
+    };
 }
