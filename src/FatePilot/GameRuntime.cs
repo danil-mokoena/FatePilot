@@ -241,6 +241,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             CanUseFood = !loading && upkeepOptions.FoodItemId != 0 && CanUseItem(upkeepOptions.FoodHq ? upkeepOptions.FoodItemId + 1_000_000 : upkeepOptions.FoodItemId),
             CanSelfRepair = !loading && CanSelfRepair(), RepairBusy = RepairBusy,
             GemstoneTrader = loading ? null : TraderActor(),
+            ItemCounts = loading ? new Dictionary<uint, int>() : QueueItemCounts(),
         };
     }
 
@@ -272,6 +273,16 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             }
         }
         return text.Length == 0 ? "" : "FatePilot trader windows\n" + text;
+    }
+
+    private unsafe Dictionary<uint, int> QueueItemCounts()
+    {
+        var counts = new Dictionary<uint, int>();
+        var inventory = InventoryManager.Instance();
+        if (inventory == null) return counts;
+        foreach (var id in upkeepOptions.PurchaseQueue.Select(o => o.ItemId).Distinct())
+            counts[id] = inventory->GetInventoryItemCount(id, false, false, false) + inventory->GetInventoryItemCount(id, true, false, false);
+        return counts;
     }
 
     private static VendorActor? TraderActor()

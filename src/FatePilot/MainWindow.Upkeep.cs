@@ -43,6 +43,7 @@ internal sealed partial class MainWindow
     {
         var o = config.Options;
         DrawGemstones(o);
+        DrawPurchaseQueue(o);
 
         BeginCard("repair");
         IconTitle(ItemIcon(DarkMatterIcon) is > 0 and var dm ? dm : 0, L.T("Reparo"));

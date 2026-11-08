@@ -173,6 +173,12 @@ public sealed class Plugin : IDalamudPlugin
             var oldState = runner.State;
             runtime.ValidateControl();
             runner.Tick(world, now);
+            // Purchases seen by the session are marked in the saved queue too.
+            var bought = runner.TakePurchases();
+            foreach (var (item, quantity) in bought)
+                if (config.Options.PurchaseQueue.FirstOrDefault(o => o.ItemId == item && o.Remaining > 0) is { } order)
+                    order.Bought = Math.Min(order.Quantity, order.Bought + quantity);
+            if (bought.Count > 0) config.Save();
             runtime.Update(world);
             if ((oldState == RunState.InstanceChange || oldState == RunState.Gateway) && runner.State != oldState) runtime.AcknowledgeTravelComplete();
             window.World = world;
