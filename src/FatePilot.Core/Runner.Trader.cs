@@ -6,7 +6,7 @@ namespace FatePilot.Core;
 // The menu and the shop are left to the player: nothing inside them is clicked.
 public sealed partial class Runner
 {
-    private bool WantsTrader => PendingReturnGoal == ReturnGoal.Trader ||
+    private bool WantsTrader => PendingReturnGoal is ReturnGoal.Trader or ReturnGoal.Purchase ||
         (options.VisitGemstoneTrader && PendingReturnGoal is ReturnGoal.Gemstones or ReturnGoal.CurrencyCap);
 
     // "Go to the trader now": a short session whose only goal is the trader.
@@ -59,10 +59,61 @@ public sealed partial class Runner
             if (w.Mounted || w.Flying) { if (Throttle(now, 2)) { transitionUntil = now + 5; runtime.Dismount(); } return; }
             runtime.StopMovement();
             runtime.TalkTo(trader);
+            if (PendingReturnGoal == ReturnGoal.Purchase && NextOrder() is { } order) { BeginPurchaseWait(w, order, now); return; }
             Finish(L.T("Conversa com o trocador de gemstones aberta. Escolha a loja e compre o que quiser."));
             return;
         }
         if (w.NavReady && !w.NavBusy && Throttle(now, 2)) runtime.Move(trader?.Position ?? expected.Position, options.UseFlight && w.CanFly && w.Mounted);
+    }
+
+    // ---------- 1.1 purchase queue ----------
+    private GemstoneOrder? NextOrder() => options.PurchaseQueue.FirstOrDefault(o => o.Remaining > 0);
+    private uint buyingItem;
+    private int buyingBaseline, buyingWanted;
+    private readonly List<(uint ItemId, int Quantity)> purchases = [];
+
+    // Purchases seen this session, for the plugin to mark in the saved queue.
+    public List<(uint ItemId, int Quantity)> TakePurchases()
+    {
+        var done = purchases.ToList();
+        purchases.Clear();
+        return done;
+    }
+
+    // The trader's conversation is open: the player buys, the plugin only watches the bag.
+    private void BeginPurchaseWait(World w, GemstoneOrder order, double now)
+    {
+        try { runtime.Suspend(); } catch (Exception) { }
+        buyingItem = order.ItemId;
+        buyingBaseline = w.ItemCounts.GetValueOrDefault(order.ItemId);
+        buyingWanted = order.Remaining;
+        Enter(RunState.Buying, L.T("Compre {0}× {1} na loja do trocador. Assim que a compra aparecer na bolsa, o FatePilot volta aos FATEs.", order.Remaining, order.Name), now);
+        Alert(NotifyKind.Goal, Status);
+    }
+
+    private void TickBuying(World w, double now)
+    {
+        if (w.Loading || !w.LoggedIn) return;
+        var order = options.PurchaseQueue.FirstOrDefault(o => o.ItemId == buyingItem && o.Remaining > 0);
+        var bought = Math.Max(0, w.ItemCounts.GetValueOrDefault(buyingItem) - buyingBaseline);
+        if (now - since > 600) { Finish(L.T("A compra não apareceu na bolsa em 10 minutos. Sessão encerrada no trocador.")); return; }
+        // Let the player shop; decide only once the trader windows are closed.
+        if (w.Occupied || w.DialogueOpen || now - since < 8) return;
+        if (bought == 0) { Finish(L.T("Nada foi comprado. Sessão encerrada no trocador.")); return; }
+        if (order != null) order.Bought = Math.Min(order.Quantity, order.Bought + bought);
+        purchases.Add((buyingItem, bought));
+        runtime.Log(L.T("Compra registrada: {0}× {1}.", bought, order?.Name ?? buyingItem.ToString()));
+        try { runtime.ResumeSession(); }
+        catch (Exception ex) { Stop(L.T("Não foi possível continuar: {0}", ex.GetBaseException().Message), true); return; }
+        PendingReturnGoal = ReturnGoal.None;
+        returning = false;
+        expectedTerritory = w.Territory;
+        sessionJob = w.Job;
+        visited.Clear();
+        idleSince = noEnemySince = now;
+        Enter(RunState.Selecting, NextOrder() is { } next
+            ? L.T("Compra feita. Próxima da fila: {0}. Voltando aos FATEs.", next.Name)
+            : L.T("Compra feita. Voltando aos FATEs."), now);
     }
 
     // Session done (return goal reached or trader reached): release control and report.

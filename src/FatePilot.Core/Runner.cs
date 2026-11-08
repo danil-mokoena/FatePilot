@@ -110,7 +110,7 @@ public sealed partial class Runner(IRuntime runtime)
             if (!w.LoggedIn && !w.Loading) { Stop(L.T("Sessão encerrada: personagem desconectado."), true); return; }
             if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
-            if (w.Job != 0 && w.Job != sessionJob && State is not (RunState.Paused or RunState.SwitchingJob or RunState.Retrying)) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
+            if (w.Job != 0 && w.Job != sessionJob && State is not (RunState.Paused or RunState.SwitchingJob or RunState.Retrying or RunState.Buying)) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
             if (State == RunState.Paused) { lastHistoryTick = now; return; }
             if (State == RunState.Retrying) { lastHistoryTick = now; TickRetry(w, now); return; }
             RecordHistory(w, now);
@@ -123,6 +123,8 @@ public sealed partial class Runner(IRuntime runtime)
             {
                 PendingReturnGoal = SessionGoals.Evaluate(options, Completed, GemstonesEarned, ElapsedSeconds, w.Gemstones, w.GemstoneCap,
                     w.FreeBagSlots, SelfRepairActive ? -1 : w.MinDurability);
+                if (PendingReturnGoal == ReturnGoal.None && w.LoggedIn && !w.Loading && NextOrder() is { } order && w.Gemstones >= order.Cost * order.Remaining)
+                    PendingReturnGoal = ReturnGoal.Purchase;
                 if (PendingReturnGoal != ReturnGoal.None)
                 {
                     var goal = L.T("{0} atingida. Retorno após o FATE em andamento.", SessionGoals.Label(PendingReturnGoal));
@@ -130,6 +132,7 @@ public sealed partial class Runner(IRuntime runtime)
                     Alert(NotifyKind.Goal, goal);
                 }
             }
+            if (State == RunState.Buying) { TickBuying(w, now); return; }
 
             if (State == RunState.Teleporting) { TickTeleport(w, now); return; }
             if (State == RunState.Gateway) { TickGateway(w, now); return; }
@@ -213,6 +216,7 @@ public sealed partial class Runner(IRuntime runtime)
             returning = true;
             // A trip to the trader from a zone that has its own trader: just walk to it.
             if (PendingReturnGoal == ReturnGoal.Trader && GemstoneTraders.In(w.Territory) != null) { EnterTrader(w, now); return; }
+            if (PendingReturnGoal == ReturnGoal.Purchase && w.Territory == ReturnTarget.TerritoryId) { EnterTrader(w, now); return; }
             Teleport(ReturnTarget, w, now);
             return;
         }
@@ -414,7 +418,7 @@ public sealed partial class Runner(IRuntime runtime)
     }
 
     // Gemstone-driven returns go to the chosen gemstone trader city when one is set.
-    private Destination ReturnTarget => PendingReturnGoal is ReturnGoal.Gemstones or ReturnGoal.CurrencyCap or ReturnGoal.Trader && options.GemstoneDestination != null
+    private Destination ReturnTarget => PendingReturnGoal is ReturnGoal.Gemstones or ReturnGoal.CurrencyCap or ReturnGoal.Trader or ReturnGoal.Purchase && options.GemstoneDestination != null
         ? options.GemstoneDestination : options.ReturnDestination!;
 
     private void Teleport(Destination destination, World w, double now)

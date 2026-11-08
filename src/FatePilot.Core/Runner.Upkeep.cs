@@ -15,7 +15,7 @@ public sealed partial class Runner
     public void TogglePauseAfterFate() { if (IsRunning && !IsPaused) PauseAfterFate = !PauseAfterFate; }
 
     private bool SafeToPause => State is not (RunState.Teleporting or RunState.Gateway or RunState.InstanceChange
-        or RunState.Restocking or RunState.SwitchingJob or RunState.Repairing or RunState.Paused or RunState.Retrying or RunState.ToTrader);
+        or RunState.Restocking or RunState.SwitchingJob or RunState.Repairing or RunState.Paused or RunState.Retrying or RunState.ToTrader or RunState.Buying);
 
     private bool TryApplyPause(World w, double now)
     {

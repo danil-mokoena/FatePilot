@@ -73,6 +73,8 @@ public static class ProfileCode
         o.ExcludedFates = (o.ExcludedFates ?? []).Distinct().Take(MaxListEntries).ToList();
         o.PriorityFates = (o.PriorityFates ?? []).Distinct().Take(MaxListEntries).ToList();
         o.JobQueue = []; o.UseJobQueue = false;
+        o.PurchaseQueue = (o.PurchaseQueue ?? []).Where(x => x != null).Take(50).ToList();
+        foreach (var order in o.PurchaseQueue) { order.Name = CleanName(order.Name ?? "", 80); order.Bought = 0; }
     }
 
     // Printable text only, no line breaks or control characters, trimmed to a length.

@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace FatePilot.Core;
 
-public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending, Gateway, Paused, SwitchingJob, Repairing, Retrying, ToTrader }
+public enum RunState { Stopped, Selecting, Mounting, Moving, Landing, Syncing, Fighting, Waiting, HubApproach, InstanceChange, Teleporting, Finished, Faulted, StartingEvent, Restocking, Defending, Gateway, Paused, SwitchingJob, Repairing, Retrying, ToTrader, Buying }
 public enum NotifyKind { Stopped, Goal, PriorityFate, Problem, Tell }
 public enum EventState { Other, Preparing = 3, Running = 4, Ending = 5, Ended = 7, Failed = 8 }
 public enum FateKind { Unknown, Combat, Collection, Defense, Escort }
@@ -73,6 +73,8 @@ public sealed class RunOptions
     // 1.0: rebuild the route when the job's real level changes; walk to the gemstone trader after a gemstone return.
     public bool FollowLevelRoute { get; set; }
     public bool VisitGemstoneTrader { get; set; } = true;
+    // 1.1: items to buy with gemstones, in order. Each one is a goal: farm, buy, back to FATEs.
+    public List<GemstoneOrder> PurchaseQueue { get; set; } = [];
     public bool UseTickets { get; set; }
     public bool PayGilWhenTicketsRunOut { get; set; }
     public int TicketMinimumFare { get; set; }
@@ -121,6 +123,10 @@ public sealed class RunOptions
             throw new InvalidOperationException(L.T("O som do aviso ou o número de tentativas contém valores inválidos."));
         if (UseFood && FoodItemId == 0)
             throw new InvalidOperationException(L.T("Escolha uma comida da bolsa ou desative o uso de comida."));
+        if (PurchaseQueue.Any(o => o.ItemId == 0 || o.Cost is < 1 or > 100000 || o.Quantity is < 1 or > 999 || o.Bought < 0))
+            throw new InvalidOperationException(L.T("A fila de compras contém itens inválidos."));
+        if (PurchaseQueue.Any(o => o.Bought < o.Quantity) && GemstoneTraders.In((GemstoneDestination ?? ReturnDestination)?.TerritoryId ?? 0) == null)
+            throw new InvalidOperationException(L.T("Para usar a fila de compras, escolha em Inventário a cidade para trocar gemstones."));
         if (UseJobQueue && (JobQueue.Count == 0 || JobQueue.Any(j => j.TargetLevel is < 1 or > 100 || j.Job is 0 or (>= 8 and <= 18))))
             throw new InvalidOperationException(L.T("A fila de classes precisa de gearsets de combate com nível-alvo entre 1 e 100."));
     }
@@ -161,6 +167,18 @@ public static class GemstoneTraders
     }.ToDictionary(t => t.Territory);
 
     public static Trader? In(uint territory) => traders.GetValueOrDefault(territory);
+}
+
+// One entry of the gemstone purchase queue (cost per unit, read from the client's shop data).
+public sealed class GemstoneOrder
+{
+    public uint ItemId { get; set; }
+    public string Name { get; set; } = "";
+    public uint Icon { get; set; }
+    public int Cost { get; set; }
+    public int Quantity { get; set; } = 1;
+    public int Bought { get; set; }
+    public int Remaining => Math.Max(0, Quantity - Bought);
 }
 
 public sealed class JobGoal
@@ -218,6 +236,8 @@ public sealed record World
     public bool CanSummonChocobo { get; init; }
     public VendorActor? GreensVendor { get; init; }
     public VendorActor? GemstoneTrader { get; init; }
+    // Bag counts of the items in the purchase queue (to see a purchase arrive).
+    public IReadOnlyDictionary<uint, int> ItemCounts { get; init; } = new Dictionary<uint, int>();
     public GreensShopState GreensShop { get; init; }
     public string? GreensShopError { get; init; }
     public int FreeBagSlots { get; init; } = -1;
