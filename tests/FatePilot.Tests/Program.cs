@@ -104,6 +104,16 @@ Test("Collection delivers only to its own recipient and confirms progress", () =
     r.Tick(w with{Fates=[collect with{State=EventState.Ended,Progress=100,HandedIn=3}]},8);
     Assert(r.Completed==1);
 });
+Test("1.3.1 collection never keeps picking up silently when the batch is ready but the recipient is unknown", () =>
+{
+    var collect=fate with{Kind=FateKind.Collection,HeldItems=15,Position=Vector3.Zero};
+    var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[new(601,1,ObjectiveRole.Pickup,Vector3.Zero)]};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    Assert(rt.Interactions.Count==0 && r.Status.Contains("15"));
+    r.Tick(w with{Objectives=[new(601,1,ObjectiveRole.Pickup,Vector3.Zero),new(502,1,ObjectiveRole.Recipient,Vector3.Zero)]},10);
+    Assert(rt.Interactions.Count==1 && rt.Interactions[0].Id==502);
+});
 Test("Collection periodically delivers a partial batch without assuming completion", () =>
 {
     var collect=fate with{Kind=FateKind.Collection,HeldItems=4,Position=Vector3.Zero};
