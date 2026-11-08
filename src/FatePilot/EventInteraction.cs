@@ -44,8 +44,12 @@ internal sealed unsafe class EventInteraction(Action<string> log)
             (array != 0 && (id == array || handler == array));
     }
 
+    // The NPC each FATE was offered by while it was preparing (session memory only).
+    private static readonly Dictionary<ushort, ulong> Starters = [];
+
     public static void SnapshotObjectives(FateContext* fate, List<ObjectiveActor> output)
     {
+        if (Starters.Count > 64) Starters.Clear();
         var candidates = new List<FateNpcCandidate>();
         foreach (var npc in Services.Objects)
         {
@@ -57,9 +61,18 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         }
         var starter = fate->State == FateState.Preparing
             ? FateNpcBinding.Resolve(fate->MotivationNpc, fate->FateModeMotivationIcon, fate->Location, fate->Radius, candidates) : null;
-        var recipient = fate->Rule == 2
-            ? FateNpcBinding.Resolve(fate->ObjectiveNpc is 0 or 0xE0000000 ? fate->MotivationNpc : fate->ObjectiveNpc,
-                fate->FateModeObjectiveIcon, fate->Location, fate->Radius, candidates) : null;
+        if (starter != null) Starters[fate->FateId] = starter.Id;
+        FateNpcCandidate? recipient = null;
+        if (fate->Rule == 2)
+        {
+            // 1.3.1: the turn-in NPC is usually the one that gave the FATE. Try the objective NPC,
+            // then the FATE's own NPC, then the exact NPC this FATE was started from.
+            if (fate->ObjectiveNpc is not (0 or 0xE0000000))
+                recipient = FateNpcBinding.Resolve(fate->ObjectiveNpc, fate->FateModeObjectiveIcon, fate->Location, fate->Radius, candidates);
+            recipient ??= FateNpcBinding.Resolve(fate->MotivationNpc, fate->FateModeObjectiveIcon, fate->Location, fate->Radius, candidates);
+            if (recipient == null && Starters.TryGetValue(fate->FateId, out var known))
+                recipient = candidates.FirstOrDefault(c => c.Id == known && c.Targetable && c.Alive && !c.Hostile);
+        }
         if (starter != null) output.Add(new(starter.Id, fate->FateId, ObjectiveRole.Starter, starter.Position, starter.Hitbox));
         if (recipient != null) output.Add(new(recipient.Id, fate->FateId, ObjectiveRole.Recipient, recipient.Position, recipient.Hitbox));
         foreach (var obj in Services.Objects)
