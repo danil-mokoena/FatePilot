@@ -1276,6 +1276,40 @@ Test("A group boss engaging the player is reported as a problem stop", () =>
     Assert(r.State==RunState.Faulted && f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped));
 });
 
+// ---------- 1.1 ----------
+Test("Purchase queue: farm until the next item is affordable, buy at the trader, then back to FATEs", () =>
+{
+    var trader=GemstoneTraders.In(962)!;
+    var o=Options(); o.ReturnAfterFates=0; o.Route=[zone1]; o.GemstoneDestination=new(962,182,"Old Sharlayan");
+    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Luncheon Toad Skin",Cost=2,Quantity=3}];
+    var field=world with{Fates=[]};
+    var (r,rt)=Started(field with{Gemstones=4},o);
+    r.Tick(field with{Gemstones=4},1); Assert(rt.Teleports.Count==0, "4 gemstones do not cover 3 × 2");
+    r.Tick(field with{Gemstones=6},2); Assert(rt.Teleports.SequenceEqual(new[]{o.GemstoneDestination}), r.Status);
+    var city=world with{Territory=962,Fates=[],Gemstones=6,GemstoneTrader=new(55,trader.Position,1),ItemCounts=new Dictionary<uint,int>{[500]=0}};
+    r.Tick(city with{Loading=true},3); r.Tick(city,4); Assert(r.State==RunState.ToTrader, r.Status);
+    r.Tick(city with{Position=trader.Position},5);
+    Assert(r.State==RunState.Buying && rt.Talks==1 && rt.Suspends==1, r.Status);
+    var shopping=city with{Position=trader.Position,DialogueOpen=true,Occupied=true,Gemstones=0,ItemCounts=new Dictionary<uint,int>{[500]=3}};
+    r.Tick(shopping,20); Assert(r.State==RunState.Buying, "Waits while the shop is open");
+    r.Tick(shopping with{DialogueOpen=false,Occupied=false},21);
+    Assert(r.State==RunState.Selecting && rt.Resumes==1 && r.TakePurchases().SequenceEqual(new[]{(500u,3)}), r.Status);
+    r.Tick(city with{Gemstones=0,ItemCounts=new Dictionary<uint,int>{[500]=3}},22);
+    Assert(rt.Teleports.Last()==zone1, "Back to the route");
+});
+Test("Purchase queue: leaving the shop without buying ends at the trader; a queue needs a trader city", () =>
+{
+    var trader=GemstoneTraders.In(962)!;
+    var o=Options(); o.ReturnAfterFates=0; o.GemstoneDestination=new(962,182,"Old Sharlayan");
+    o.PurchaseQueue=[new GemstoneOrder{ItemId=500,Name="Toad",Cost=2,Quantity=1}];
+    var city=world with{Territory=962,Fates=[],Gemstones=6,GemstoneTrader=new(55,trader.Position,1),Position=trader.Position};
+    var (r,rt)=Started(city,o);
+    r.Tick(city,1); r.Tick(city,2); Assert(r.State==RunState.Buying, r.Status);
+    r.Tick(city,20); Assert(r.State==RunState.Finished, r.Status);
+    o.GemstoneDestination=null; var fake=new Fake(); var r2=new Runner(fake); r2.Start(o,world,0);
+    Assert(r2.State==RunState.Faulted, "Limsa has no gemstone trader");
+});
+
 // ---------- 1.0 ----------
 Test("A trader trip walks to the zone's trader, opens the talk once and hands control back", () =>
 {
