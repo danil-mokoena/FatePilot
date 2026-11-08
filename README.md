@@ -5,7 +5,15 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.2.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.3.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 1.3
+
+- **Experience bar** for a job that is still levelling, in the compact panel and in the session page: job, level, EXP earned this session, levels gained and the bar itself, read from the game's own experience bar (hidden at the job's max level, limited jobs included). Hover it for current / needed EXP.
+- **Grand Company seals earned** this session, next to gemstones, with your balance and the seal cap on hover (warns when the cap is reached). Seals spent at your Grand Company never count as a loss.
+- The session page shows EXP, seals and gemstones per hour after five minutes.
+
+164 local tests pass, with zero build warnings/errors.
 
 ### New in 1.2
 
