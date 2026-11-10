@@ -116,8 +116,9 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         // director's; this verified object's own event is part of the same interaction.
         var nativeObj = (NativeObject*)obj.Address;
         var events = new List<uint> { 0x801A0000u | actor.FateId, nativeFate->ArrayEventHandler.Id };
-        // The verified pickup or turn-in NPC can also run its own event (e.g. the Item Request window).
-        if (actor.Role is ObjectiveRole.Pickup or ObjectiveRole.Recipient)
+        // The verified FATE NPC or object can run its own event instead of the FATE director's:
+        // the starter's "I beg of you..." pages, the turn-in Item Request window, a pickup.
+        // Ownership still requires that exact actor in the event state.
         {
             if (nativeObj->EventId.Id != 0) events.Add(nativeObj->EventId.Id);
             if (nativeObj->EventHandler != null && nativeObj->EventHandler->Info.EventId.Id != 0) events.Add(nativeObj->EventHandler->Info.EventId.Id);
@@ -141,7 +142,7 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         for (var i = 0; i < selector->OptionsCount; i++)
         {
             var option = selector->Options[i];
-            if (option.Handler == null || !lease.Matches(new(owned.Id, option.Handler->Info.EventId.Id))) continue;
+            if (option.Handler == null || !lease.MatchesHandler(option.Handler->Info.EventId.Id)) continue;
             if (match >= 0) return -1; // Ambiguous menus are not guessed.
             match = i;
         }
