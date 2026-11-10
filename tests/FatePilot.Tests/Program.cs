@@ -231,14 +231,30 @@ Test("Interaction ownership waits for context then accepts the expected actor an
     Assert(lease.Observe(1,true,new(502,0x000D0007),default,false)==InteractionStatus.Owned);
     Assert(lease.Observe(2,false,default,default,false)==InteractionStatus.None && !lease.Active);
 });
-Test("Interaction ownership rejects wrong NPCs and unrelated handlers", () =>
+Test("Interaction ownership rejects wrong NPCs", () =>
 {
-    foreach(var signal in new[]{new EventSignal(999,0x801A0001),new EventSignal(502,0x00040001)})
+    foreach(var signal in new[]{new EventSignal(999,0x801A0001),new EventSignal(999,0x00040001)})
     {
         var lease=new InteractionLease();lease.Begin(502,[0x801A0001],0);
         Assert(lease.Observe(3,true,signal,default,false)==InteractionStatus.Foreign);
         Assert(!lease.Active);
     }
+});
+Test("1.3.6 any event of the verified NPC (and its 32-bit handle) is our conversation; menus stay strict", () =>
+{
+    var lease=new InteractionLease();lease.Begin(0x1_0000_1234,[0x801A0001],0);
+    Assert(lease.Observe(1,true,new(0x1234,0x00130042),default,false)==InteractionStatus.Owned);
+    Assert(lease.MatchesHandler(0x801A0001) && !lease.MatchesHandler(0x00130042));
+    lease.Begin(0x1_0000_1234,[0x801A0001],0);
+    Assert(lease.Observe(3,true,new(0x1235,0x00130042),default,false)==InteractionStatus.Foreign);
+});
+Test("1.3.6 an unrecognised interaction is dropped without stopping the session", () =>
+{
+    var w=world with{Fates=[fate],CurrentFate=1,Synced=true};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    for(int i=7;i<=9;i++) r.Tick(w with{EventInteractionError="foreign"},i);
+    Assert(r.IsRunning);
 });
 Test("Scene actor can identify an owned dialog while the event object is unset", () =>
 {
