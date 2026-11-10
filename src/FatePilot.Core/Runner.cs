@@ -339,6 +339,12 @@ public sealed partial class Runner(IRuntime runtime)
             return;
         }
         if (Vector3.Distance(w.Position, lastPosition) > 2) { lastPosition = w.Position; lastMotion = now; }
+        // A moving FATE (escort) arrives somewhere else than where we were sent: follow it.
+        if (!w.NavBusy && now - since > 3 && f.EffectiveKind == FateKind.Escort && now - since < 240 && now - lastMotion <= 25)
+        {
+            if (Throttle(now, 2)) runtime.Move(f.Position, false);
+            return;
+        }
         if (now - lastMotion > 25 || now - since > 240 || (!w.NavBusy && now - since > 3))
             SkipOrFail(L.T("Rota interrompida, sem progresso ou sem ponto alcançável."), now);
     }
@@ -387,6 +393,19 @@ public sealed partial class Runner(IRuntime runtime)
         var f = RefreshFate(w, now);
         if (f == null) return;
         var finalHandIn = f.EffectiveKind == FateKind.Collection && f.State == EventState.Ending && f.HeldItems > 0;
+        // 1.3.5: an escort's circle moves with the NPC. Falling behind it is not "leaving the FATE":
+        // walk after the escort (or the moving centre) instead of re-routing, which used to give up
+        // and pick another FATE.
+        if (w.CurrentFate != f.Id && f.EffectiveKind == FateKind.Escort && !w.InCombat
+            && Vector3.Distance(w.Position, f.Position) <= f.Radius + 80)
+        {
+            runtime.SetCombat(false);
+            var escort = w.Objectives.Where(a => a.FateId == f.Id && a.Role == ObjectiveRole.Escort)
+                .MinBy(a => Vector3.Distance(w.Position, a.Position));
+            Status = L.T("Acompanhando o objetivo do FATE.");
+            ApproachObjective(w, escort?.Position ?? f.Position, escort != null ? Math.Max(4, escort.Hitbox + 3) : 5, now);
+            return;
+        }
         if (w.CurrentFate != f.Id && !finalHandIn)
         {
             runtime.SetCombat(false);

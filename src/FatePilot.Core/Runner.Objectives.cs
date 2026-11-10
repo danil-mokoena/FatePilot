@@ -12,6 +12,7 @@ public sealed partial class Runner
     private int interactionAttempts;
     private double heldSince;
     private bool delivering;
+    private int lastObjectiveProgress = -1;
     private double lastStarterDiagnostic = -100;
 
     private void ResetObjectives(FateInfo fate, double now)
@@ -26,6 +27,7 @@ public sealed partial class Runner
         interactionAttempts = 0;
         heldSince = fate.HeldItems > 0 ? now : -1;
         delivering = false;
+        lastObjectiveProgress = fate.Progress;
         lastStarterDiagnostic = now - 10;
         runtime.CancelEventInteraction();
     }
@@ -137,6 +139,13 @@ public sealed partial class Runner
             else
             {
                 Status = L.T("Aguardando a próxima etapa do FATE.");
+                if (f.EffectiveKind == FateKind.Escort)
+                {
+                    Status = L.T("Procurando o NPC da escolta.");
+                    if (now - lastStarterDiagnostic >= 10) { lastStarterDiagnostic = now; runtime.Log(Status + " " + f.ObjectiveDiagnostic); }
+                }
+                // 1.3.5: an escort that keeps advancing is not lost, even before its NPC is identified.
+                if (f.Progress != lastObjectiveProgress) { lastObjectiveProgress = f.Progress; objectiveProgressAt = now; }
                 if (now - objectiveProgressAt > 120 && f.EffectiveKind == FateKind.Escort)
                     SkipOrFail(L.T("Objetivo de escolta não encontrado."), now);
             }
