@@ -57,7 +57,7 @@ internal sealed unsafe class EventInteraction(Action<string> log)
             var native = (NativeObject*)npc.Address;
             candidates.Add(new(npc.GameObjectId, npc.EntityId, npc.BaseId, native->LayoutId, Matches(native, fate),
                 npc.IsTargetable, npc is not IBattleNpc battle || !battle.IsDead,
-                npc is IBattleNpc b && b.StatusFlags.HasFlag(StatusFlags.Hostile), native->NamePlateIconId, npc.Position, npc.HitboxRadius));
+                npc is IBattleNpc && GameRuntime.Attackable(npc), native->NamePlateIconId, npc.Position, npc.HitboxRadius));
         }
         var starter = fate->State == FateState.Preparing
             ? FateNpcBinding.Resolve(fate->MotivationNpc, fate->FateModeMotivationIcon, fate->Location, fate->Radius, candidates) : null;
@@ -79,7 +79,10 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         {
             if (obj.Address == 0 || obj.ObjectKind is not (ObjectKind.EventNpc or ObjectKind.EventObj or ObjectKind.BattleNpc)) continue;
             var native = (NativeObject*)obj.Address;
-            if (obj is IBattleNpc enemy && (enemy.IsDead || enemy.StatusFlags.HasFlag(StatusFlags.Hostile))) continue;
+            // 1.3.5: the game's "hostile" flag is also set on friendly FATE NPCs on the move or
+            // fighting (escorted merchants), which dropped them as escort targets. Only something
+            // the player can actually attack is an enemy.
+            if (obj is IBattleNpc enemy && (enemy.IsDead || GameRuntime.Attackable(enemy))) continue;
             var knownStarter = fate->MotivationNpc is not (0 or 0xE0000000) && obj.EntityId == fate->MotivationNpc;
             var knownRecipient = fate->ObjectiveNpc is not (0 or 0xE0000000) && obj.EntityId == fate->ObjectiveNpc;
             var linked = Matches(native, fate);

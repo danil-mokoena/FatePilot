@@ -186,7 +186,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
                 {
                     Kind = FateRules.FromRule(native->Rule),
                     CanStart = native->MotivationNpc is not (0 or 0xE0000000) || objectives.Any(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Starter),
-                    ObjectiveDiagnostic = $"FATE={f.FateId}; starterRef={native->MotivationNpc:X8}; recipientRef={native->ObjectiveNpc:X8}; array={native->ArrayEventHandler.Id:X8}; starters={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Starter)}; recipients={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Recipient)}; pickups={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Pickup)}; item={native->EventItem}; objectiveIcon={native->FateModeObjectiveIcon}",
+                    ObjectiveDiagnostic = $"FATE={f.FateId}; starterRef={native->MotivationNpc:X8}; recipientRef={native->ObjectiveNpc:X8}; array={native->ArrayEventHandler.Id:X8}; starters={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Starter)}; recipients={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Recipient)}; pickups={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Pickup)}; escorts={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Escort)}; rule={native->Rule}; item={native->EventItem}; objectiveIcon={native->FateModeObjectiveIcon}",
                     HeldItems = native->Rule == 2 ? EventInteraction.ItemCount(native->TurnInEventItem != 0 ? native->TurnInEventItem : native->EventItem != 0 ? native->EventItem : native->ReqEventItem) : 0,
                     HandedIn = native->HandInCount,
                 });
@@ -343,7 +343,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
     }
     public void SetCombat(bool enabled) => combat.SetEnabled(enabled);
     // Auto-attack (action 7) is only usable on things the player can fight.
-    private static unsafe bool Attackable(IGameObject obj) =>
+    internal static unsafe bool Attackable(IGameObject obj) =>
         obj.Address != 0 && ActionManager.CanUseActionOnTarget(7, (NativeObject*)obj.Address);
 
     public void Target(ulong id)
