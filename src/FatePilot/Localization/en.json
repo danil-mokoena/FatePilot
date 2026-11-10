@@ -1,4 +1,5 @@
 {
+  "Interação ignorada: {0} O FatePilot não clicou em nada e segue no FATE.": "Interaction dropped: {0} FatePilot clicked nothing and carries on with the FATE.",
   "Procurando o NPC da escolta.": "Looking for the NPC to escort.",
   "Itens do FATE entregues pela janela de pedido.": "FATE items handed over through the item request window.",
   "{0} itens prontos para entrega, mas o NPC de entrega do FATE não foi identificado.": "{0} items ready to hand in, but the FATE's turn-in NPC was not identified.",
