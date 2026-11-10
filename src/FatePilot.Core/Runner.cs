@@ -28,6 +28,8 @@ public sealed partial class Runner(IRuntime runtime)
     private uint expectedTerritory;
     private FateKey selectedKey;
     private bool participated, sawLoading, returning, waitingForPlayerDialog;
+    private int interactionErrors;
+    private double lastInteractionError = double.NegativeInfinity;
     private int nextInstance;
     private Destination? teleportDestination;
     // 0.7: local per-zone history shared with the plugin configuration.
@@ -146,7 +148,18 @@ public sealed partial class Runner(IRuntime runtime)
             if (State == RunState.Restocking) { TickRestock(w, now); return; }
             if (State == RunState.ToTrader) { TickTrader(w, now); return; }
             if (State == RunState.Repairing) { TickRepair(w, now); return; }
-            if (w.EventInteractionError != null) { StopOrRecover(w.EventInteractionError, now); return; }
+            if (w.EventInteractionError != null)
+            {
+                // 1.3.6: an interaction we could not recognise is dropped (nothing is clicked) and
+                // the FATE goes on; only a run of them in a short time stops the session.
+                if (now - lastInteractionError > 120) interactionErrors = 0;
+                lastInteractionError = now;
+                if (++interactionErrors >= 4) { interactionErrors = 0; StopOrRecover(w.EventInteractionError, now); return; }
+                runtime.CancelEventInteraction();
+                runtime.Log(L.T("Interação ignorada: {0} O FatePilot não clicou em nada e segue no FATE.", w.EventInteractionError) + " " + w.InteractionDiagnostic);
+                return;
+            }
+            if (w.OwnEventInteraction) interactionErrors = 0;
             if (Selected != null && (w.OwnEventInteraction || w.EventInteractionPending))
             {
                 runtime.StopMovement();

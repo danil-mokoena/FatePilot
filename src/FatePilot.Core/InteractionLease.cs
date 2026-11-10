@@ -55,7 +55,17 @@ public sealed class InteractionLease
         return InteractionStatus.Foreign;
     }
 
+    // 1.3.6: the event state can carry the actor's 32-bit handle (local event NPCs) instead of the
+    // full object ID; the low 32 bits identify the same actor.
+    // The actor itself was verified as this FATE's NPC/object before we interacted with it, so any
+    // event it runs right after our interaction (opening pages, Item Request, a pickup's gathering)
+    // is ours. Another actor's event is ours only through the FATE's own handlers.
     public bool Matches(EventSignal signal, ulong sceneObject = 0) => Active &&
-        (signal.ObjectId == actor || sceneObject == actor) && events.Contains(signal.EventId);
+        (SameActor(signal.ObjectId) || (SameActor(sceneObject) && events.Contains(signal.EventId)));
+
+    // Menu choices stay strict: only the FATE's own handlers are ever picked from a selector.
+    public bool MatchesHandler(uint eventId) => Active && events.Contains(eventId);
+
+    private bool SameActor(ulong id) => id != 0 && (id == actor || ((uint)id == (uint)actor && (uint)id is not (0 or 0xE0000000)));
     public void Cancel() { actor = 0; events = []; observed = false; }
 }

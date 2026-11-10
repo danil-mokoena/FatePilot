@@ -90,7 +90,9 @@ public sealed partial class Runner
             var recipient = actors.FirstOrDefault(a => a.Role == ObjectiveRole.Recipient);
             delivering |= f.HeldItems > 0 && (f.HeldItems >= options.CollectionBatchSize ||
                 PendingReturnGoal != ReturnGoal.None || (heldSince >= 0 && now - heldSince >= 45) || f.SecondsLeft < 90 || f.Progress >= 80 || f.State == EventState.Ending);
-            if (delivering && f.HeldItems > 0 && recipient != null && !w.InCombat)
+            // 1.3.6: nothing is attacking us here (handled above). The game's in-combat flag stays
+            // on while a pet or companion fights, so it must not block collecting or handing in.
+            if (delivering && f.HeldItems > 0 && recipient != null)
             {
                 Status = L.T("Entregando itens do FATE: {0}", f.HeldItems);
                 ApproachAndInteract(w, recipient, now);
@@ -109,7 +111,7 @@ public sealed partial class Runner
                     }
                 }
             }
-            else if (!w.InCombat && actors.Where(a => a.Role == ObjectiveRole.Pickup)
+            else if (actors.Where(a => a.Role == ObjectiveRole.Pickup)
                          .MinBy(a => Vector3.Distance(w.Position, a.Position)) is { } pickup)
             {
                 Status = L.T("Recolhendo itens do FATE.");
@@ -122,7 +124,7 @@ public sealed partial class Runner
                 if (f.HeldItems > 0 && recipient == null)
                     Status = L.T("Aguardando o NPC de entrega do FATE.");
             }
-            if (now - objectiveProgressAt > 180 && !w.InCombat)
+            if (now - objectiveProgressAt > 180)
                 SkipOrFail(L.T("Coleta sem progresso confirmado por 180 segundos."), now);
         }
         else
