@@ -1,11 +1,20 @@
-﻿<p align="center"><img src="src/FatePilot/Assets/logo.png" alt="FatePilot guiding star" width="140" /></p>
+<p align="center"><img src="src/FatePilot/Assets/logo.png" alt="FatePilot guiding star" width="140" /></p>
 <h1 align="center">FatePilot</h1>
 <p align="center"><strong>Chart your route. Find your destiny.</strong><br />By Mokoena</p>
-<p align="center"><a href="#installation">Installation</a> Â· <a href="#dependencies">Dependencies</a> Â· <a href="#features">Features</a> Â· <a href="SECURITY.md">Privacy &amp; security</a> Â· <a href="https://github.com/danil-mokoena/FatePilot/releases">Releases</a></p>
+<p align="center"><a href="#installation">Installation</a> · <a href="#dependencies">Dependencies</a> · <a href="#features">Features</a> · <a href="SECURITY.md">Privacy &amp; security</a> · <a href="https://github.com/danil-mokoena/FatePilot/releases">Releases</a></p>
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.3.5 Â· **Dalamud API:** 15 Â· **Build:** .NET 10 / C#
+**Version:** 1.3.6 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 1.3.6
+
+- **No more "The dialogue does not match the expected NPC and event" with FATE NPCs and pickups.** Some FATE NPCs (e.g. the Oyster Hunter in Costa del Sol) run their own event for the opening pages and the "Might those be ... you carry?" turn-in, and items on the ground run their own gathering event; some also report themselves by their short 32-bit handle. Any event of the very NPC or object FatePilot verified and interacted with is now ours. Menus still only ever pick the FATE's own option, and windows from anyone else are never clicked.
+- **An unrecognised interaction no longer stops the session.** It is dropped (nothing is clicked), logged with details, and the FATE goes on; only 4 in 2 minutes stop the session.
+- **Collection FATEs stop wandering.** Picking up items and handing them in no longer wait for the game's in-combat flag, which stays on while a pet or companion fights (Beastmaster, chocobo). FatePilot used to leave the item it was gathering to hit any FATE monster nearby, then walk back. Now it fights only what attacks you, collects, hands in, and attacks FATE monsters only when there is nothing to pick up.
+- README characters (·, —, →) restored after the 1.3.5 page showed them garbled.
+
+169 local tests pass, with zero build warnings/errors.
 
 ### Fixed in 1.3.5
 
@@ -51,25 +60,25 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
 
 ### New in 1.2
 
-- **Automatic gemstone purchase** (on by default; Inventory â†’ Gemstone purchase queue â†’ Buy automatically in the trader's shop). Inside the conversation FatePilot itself opened with the verified trader, it picks the shop in the menu, finds the queued item by its name in the shop's list, asks for the quantity your balance covers and accepts only a confirmation that names that item. When the bag shows the purchase, it closes the shop and goes back to the FATEs. Anything unexpected â€” a window that is not the trader's, a confirmation for something else, the game refusing the purchase (full bags, shared FATE rank) â€” stops the automation and leaves the purchase to you, with the reason in the status; the queue keeps working as in 1.1.
-- **New trader item picker**: a table like a schedule, with filter pills (All, Materials, Housing, Orchestrion, Gear, Other â€” with game icons and counts), search by name or category, sort by price, your gemstone balance, and per item: price, how many you already have, how many your balance covers right now, and an Add button (adding again increases the quantity; unique items you already own are marked).
+- **Automatic gemstone purchase** (on by default; Inventory → Gemstone purchase queue → Buy automatically in the trader's shop). Inside the conversation FatePilot itself opened with the verified trader, it picks the shop in the menu, finds the queued item by its name in the shop's list, asks for the quantity your balance covers and accepts only a confirmation that names that item. When the bag shows the purchase, it closes the shop and goes back to the FATEs. Anything unexpected — a window that is not the trader's, a confirmation for something else, the game refusing the purchase (full bags, shared FATE rank) — stops the automation and leaves the purchase to you, with the reason in the status; the queue keeps working as in 1.1.
+- **New trader item picker**: a table like a schedule, with filter pills (All, Materials, Housing, Orchestrion, Gear, Other — with game icons and counts), search by name or category, sort by price, your gemstone balance, and per item: price, how many you already have, how many your balance covers right now, and an Add button (adding again increases the quantity; unique items you already own are marked).
 
 163 local tests pass, with zero build warnings/errors. The automatic purchase needs in-game validation.
 
 ### New in 1.1
 
-- **Gemstone purchase queue** (Inventory â†’ Gemstone purchase queue): pick items from your gemstone city's trader (list, icons and prices read from the game data â€” Old Sharlayan, Radz-at-Han, Tuliyollal and Solution Nine), set quantities and order. When your balance covers the next item, FatePilot finishes the current FATE, travels to the trader, opens the conversation and waits while you buy. As soon as the purchase shows up in your bags it is marked in the queue and the session goes **back to the FATEs** â€” then on to the next item, again and again. Leaving the shop without buying ends the session at the trader.
+- **Gemstone purchase queue** (Inventory → Gemstone purchase queue): pick items from your gemstone city's trader (list, icons and prices read from the game data — Old Sharlayan, Radz-at-Han, Tuliyollal and Solution Nine), set quantities and order. When your balance covers the next item, FatePilot finishes the current FATE, travels to the trader, opens the conversation and waits while you buy. As soon as the purchase shows up in your bags it is marked in the queue and the session goes **back to the FATEs** — then on to the next item, again and again. Leaving the shop without buying ends the session at the trader.
 - For now the buy click itself is yours: the exchange shop is not mapped in the client structures, so FatePilot does not click inside it blindly. **Copy the exchange window data** (with the shop open) provides what is needed to make the purchase automatic.
 
 161 local tests pass, with zero build warnings/errors.
 
 ### New in 1.0
 
-- **Route that follows your level** (Route â†’ Route for my level): on start, on level up and on job change (the job queue included), the route is rebuilt with the zones that have the most FATEs for the job's real level â€” never the lower level you are synced to inside a FATE.
-- **Simulation** (the eye next to Start): shows what a session would do right now with your settings â€” the next step, every FATE in the zone with the reason it is or is not eligible, a timeline of decisions and the chosen FATE on the Map. Nothing is moved or clicked.
-- **Trip to the gemstone trader**: after a gemstone return (on by default) or with Inventory â†’ Go to the trader now, FatePilot walks to the bicolor gemstone trader of the city or zone (all 24 traders, ShB to DT) and opens the conversation. Picking the shop and buying stay with you; nothing inside the conversation or shop is clicked. **Copy the exchange window data** captures that window so the purchase itself can be automated in a later version.
-- **In-game validation checklist** (Diagnostics): every feature that still needs a check in game, with how to test it, âœ“/âœ— marks and a copyable result.
-- **Themes for every capital** â€” Limsa Lominsa, Gridania, Ul'dah, Ishgard, Kugane, Rhalgr's Reach, Doman Enclave, The Crystarium, Eulmore, Old Sharlayan, Radz-at-Han, Tuliyollal, Solution Nine â€” plus **Classic**, the blue gradient windows of the game's Classic UI and the first Final Fantasy. Chocobo stays the default.
+- **Route that follows your level** (Route → Route for my level): on start, on level up and on job change (the job queue included), the route is rebuilt with the zones that have the most FATEs for the job's real level — never the lower level you are synced to inside a FATE.
+- **Simulation** (the eye next to Start): shows what a session would do right now with your settings — the next step, every FATE in the zone with the reason it is or is not eligible, a timeline of decisions and the chosen FATE on the Map. Nothing is moved or clicked.
+- **Trip to the gemstone trader**: after a gemstone return (on by default) or with Inventory → Go to the trader now, FatePilot walks to the bicolor gemstone trader of the city or zone (all 24 traders, ShB to DT) and opens the conversation. Picking the shop and buying stay with you; nothing inside the conversation or shop is clicked. **Copy the exchange window data** captures that window so the purchase itself can be automated in a later version.
+- **In-game validation checklist** (Diagnostics): every feature that still needs a check in game, with how to test it, ✓/✗ marks and a copyable result.
+- **Themes for every capital** — Limsa Lominsa, Gridania, Ul'dah, Ishgard, Kugane, Rhalgr's Reach, Doman Enclave, The Crystarium, Eulmore, Old Sharlayan, Radz-at-Han, Tuliyollal, Solution Nine — plus **Classic**, the blue gradient windows of the game's Classic UI and the first Final Fantasy. Chocobo stays the default.
 
 159 local tests pass, with zero build warnings/errors.
 
@@ -81,9 +90,9 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
 ### New in 0.9
 
 - **Map page.** The zone's own map from the game, centred on you, with a live layer on top: every FATE's area with a progress ring and its icon, the current FATE highlighted with the path to it, prioritized and ignored FATEs, the spot where FATEs appear most often, the aetheryte, enemies (red when they target you) and an arrow that turns with your character. Zoom with the slider, the buttons or the mouse wheel; hover a FATE for its level, progress, time left, map coordinates and distance. Optionally shown in the compact panel too.
-- **Themes** (Settings â†’ Appearance): Chocobo (the original gold), Ishgard, Gridania, Limsa Lominsa, Ul'dah and Sharlayan, each previewed as a miniature of the window. Applies to the window and the compact panel.
-- **Keyboard shortcuts** (Settings â†’ Keyboard shortcuts): pause/resume, skip the current FATE, stop, start (still with the confirmation) and show/hide the window. Ctrl and/or Alt are required, and shortcuts are ignored while you type in chat. New `/fatepilot toggle` and `/fatepilot skip` commands work as game macros on your hotbar.
-- **Shareable profiles** (Route â†’ Share profiles): copy a saved profile as a `FATEPILOT1:` text code and paste someone else's to preview it (route with your client's zone names, locked aetherytes flagged) before saving it as a new profile. Codes carry only session settings; the job queue (your gearsets) is left out. Codes are size-limited, validated and never applied without your click.
+- **Themes** (Settings → Appearance): Chocobo (the original gold), Ishgard, Gridania, Limsa Lominsa, Ul'dah and Sharlayan, each previewed as a miniature of the window. Applies to the window and the compact panel.
+- **Keyboard shortcuts** (Settings → Keyboard shortcuts): pause/resume, skip the current FATE, stop, start (still with the confirmation) and show/hide the window. Ctrl and/or Alt are required, and shortcuts are ignored while you type in chat. New `/fatepilot toggle` and `/fatepilot skip` commands work as game macros on your hotbar.
+- **Shareable profiles** (Route → Share profiles): copy a saved profile as a `FATEPILOT1:` text code and paste someone else's to preview it (route with your client's zone names, locked aetherytes flagged) before saving it as a new profile. Codes carry only session settings; the job queue (your gearsets) is left out. Codes are size-limited, validated and never applied without your click.
 
 155 local tests pass, with zero build warnings/errors. The map, themes and shortcuts need in-game validation.
 
@@ -101,14 +110,14 @@ FatePilot is an independent Dalamud plugin that coordinates FATE sessions across
 
 ### New in 0.8
 
-- **Alerts** (Settings â†’ Alerts): one of the game's 16 chat sounds (`<se.1>`â€“`<se.16>`, with a test button) and a local chat line when the session stops on its own, a goal is reached or the return finishes, a prioritized FATE appears, repair/food/Chocobo fail or a retry happens, and when a tell arrives during a session. For tells only the fact that one arrived is used; sender and text are never read or stored. Nothing leaves the game.
-- **Automatic retry** (Settings â†’ Automatic retry, on by default, 1â€“5 attempts per session): after a recoverable interruption â€” an unexpected dialog, unexpected loading screen or zone change, or a busy travel module â€” FatePilot gives control back, waits for the game to settle (up to 2 minutes), adopts the current zone and job and continues. Death, logout, instanced content and group bosses always stop the session.
+- **Alerts** (Settings → Alerts): one of the game's 16 chat sounds (`<se.1>`–`<se.16>`, with a test button) and a local chat line when the session stops on its own, a goal is reached or the return finishes, a prioritized FATE appears, repair/food/Chocobo fail or a retry happens, and when a tell arrives during a session. For tells only the fact that one arrived is used; sender and text are never read or stored. Nothing leaves the game.
+- **Automatic retry** (Settings → Automatic retry, on by default, 1–5 attempts per session): after a recoverable interruption — an unexpected dialog, unexpected loading screen or zone change, or a busy travel module — FatePilot gives control back, waits for the game to settle (up to 2 minutes), adopts the current zone and job and continues. Death, logout, instanced content and group bosses always stop the session.
 
 144 local tests pass, with zero build warnings/errors. Alerts and retries need in-game validation.
 
 ### New in 0.7
 
-- **Route for my level.** From the game data (each FATE's level and its zone), FatePilot picks the unlocked zones with the most FATEs between your level âˆ’2 and the allowed levels above (e.g. level 11 â†’ Central Shroud, Lower La Noscea, Middle La Noscea). One click on the Route page, or per gearset on the Jobs page.
+- **Route for my level.** From the game data (each FATE's level and its zone), FatePilot picks the unlocked zones with the most FATEs between your level −2 and the allowed levels above (e.g. level 11 → Central Shroud, Lower La Noscea, Middle La Noscea). One click on the Route page, or per gearset on the Jobs page.
 - **History by zone** on the Session page: time, gemstones per hour, FATEs per hour and failure rate for every zone you farm, best zone first. Stored locally, cleared with one click.
 - **Prefer bonus FATEs** (FATEs page, off by default): a bonus FATE wins over a nearer one if it is no more than the chosen number of yalms farther.
 - **Wait where FATEs appear** (Route page, on by default): with nothing eligible, FatePilot flies once to the spot where FATEs appeared most often in that zone, learned from your history.
@@ -144,7 +153,7 @@ Spawn timers for boss FATEs are not available: the game does not expose them and
 - **NPC-started FATEs: the start prompt is confirmed.** After the conversation pages, the "Yes" of the FATE start prompt is now clicked: it is accepted right after FatePilot's own conversation or interaction with the bound FATE NPC (still targeted and in range). The hand-over between the last page and the prompt no longer stops the session.
 - **Your own prompts no longer stop the session.** A confirmation you open yourself (for example discarding an item) is waited out and never clicked; the session continues when it closes. Unrelated NPC conversations still stop it.
 - **Session summary** after each session: FATEs and gemstones (with per-hour rates), time, gil, Greens, food, repairs and job changes.
-- **Interface.** Grouped sidebar (Session Â· Character Â· Tools) with About and Settings at the bottom, consistent margins on every page, game icons in the compact panel (gemstones, gil) and the plugin names in Settings â†’ Dependencies.
+- **Interface.** Grouped sidebar (Session · Character · Tools) with About and Settings at the bottom, consistent margins on every page, game icons in the compact panel (gemstones, gil) and the plugin names in Settings → Dependencies.
 
 136 local tests pass, with zero build warnings/errors. Pause/resume, the job queue, self-repair, food and the gemstone-trader return still need supervised in-game validation.
 
@@ -242,7 +251,7 @@ You do **not** need the .NET SDK to install the compiled plugin. The SDK and Pow
 ## Installation
 
 1. Install and enable the [required dependencies](#dependencies).
-2. Open **Dalamud Settings â†’ Experimental â†’ Custom Plugin Repositories**.
+2. Open **Dalamud Settings → Experimental → Custom Plugin Repositories**.
 3. Add the following URL, enable the entry and save:
 
    ```text
@@ -254,7 +263,7 @@ You do **not** need the .NET SDK to install the compiled plugin. The SDK and Pow
 
 Use the URL above for installation. It points to the plugin catalog; the normal GitHub project page is for browsing the source and documentation. Future releases will use the same catalog URL.
 
-If the installer still shows a question mark after updating from 0.1, clear Dalamud's in-memory image cache: `/xldev` â†’ **Plugins â†’ Clear cached images/icons**, then reopen the installer. Use `/xldev` again to close the developer bar. Restarting the game also recreates this cache. The current package and catalog both include the icon URL; reinstalling FatePilot is unnecessary for a stale image cache.
+If the installer still shows a question mark after updating from 0.1, clear Dalamud's in-memory image cache: `/xldev` → **Plugins → Clear cached images/icons**, then reopen the installer. Use `/xldev` again to close the developer bar. Restarting the game also recreates this cache. The current package and catalog both include the icon URL; reinstalling FatePilot is unnecessary for a stale image cache.
 
 For local development, extract the plugin ZIP from [Releases](https://github.com/danil-mokoena/FatePilot/releases), keep the two DLLs, dependency JSON and manifest together, and add the full path to `FatePilot.dll` under **Dev Plugin Locations** instead. Do not load a development copy and the installed copy simultaneously.
 
@@ -267,7 +276,7 @@ For local development, extract the plugin ZIP from [Releases](https://github.com
 | [vnavmesh](https://github.com/awgil/ffxiv_navmesh) | Pathfinding | The current zone's navigation mesh must be ready |
 | [Lifestream](https://github.com/NightmareXIV/Lifestream) | Instance switching and aethernet | Enable Instance Switcher and open the aetheryte's instance menu once to discover the options. Also used for the Idyllshire aethernet gate into The Dravanian Hinterlands |
 
-These integrations are installed separately. Their implementations are not bundled with FatePilot. **Settings â†’ Dependencies** shows each integration in green (ready) or red (missing or incompatible) with a *Check again* button; the same APIs are verified again before every session starts. See [integration details](INTEGRATIONS.md) for compatibility and restoration behavior.
+These integrations are installed separately. Their implementations are not bundled with FatePilot. **Settings → Dependencies** shows each integration in green (ready) or red (missing or incompatible) with a *Check again* button; the same APIs are verified again before every session starts. See [integration details](INTEGRATIONS.md) for compatibility and restoration behavior.
 
 ## First session
 
@@ -307,7 +316,7 @@ If a previous session left a recovery record, use **Restore previous session** w
 
 ## Languages
 
-English Â· æ—¥æœ¬èªž Â· Deutsch Â· FranÃ§ais Â· **PortuguÃªs (Brasil)** Â· EspaÃ±ol
+English · 日本語 · Deutsch · Français · **Português (Brasil)** · Español
 
 **Auto** follows the official game-client language. Brazilian Portuguese and Spanish can be selected manually and are remembered. FATE and zone names continue to follow the game client's language. All UI catalogs are included locally; native-speaker review is still welcome.
 
@@ -361,7 +370,7 @@ For bug reports, include versions, reproduction steps and expected/observed beha
 
 <p><a href="https://ko-fi.com/mokoena"><img src="src/FatePilot/Assets/cat.png" alt="Mokoena's cat" width="192" /></a></p>
 
-**[â™¥ Buy my cat a treat](https://ko-fi.com/mokoena)** â€” optional support for the project and a very important snack budget.
+**[♥ Buy my cat a treat](https://ko-fi.com/mokoena)** — optional support for the project and a very important snack budget.
 
 ---
 
