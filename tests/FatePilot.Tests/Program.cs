@@ -161,6 +161,16 @@ Test("Escort follows its objective without the combat-only idle timeout", () =>
     r.Tick(w with{Position=new(18,0,0)},70);
     Assert(r.State==RunState.Fighting && !rt.CombatEnabled);
 });
+Test("1.3.5 falling behind a moving escort follows the NPC instead of giving up on the FATE", () =>
+{
+    var escort=fate with{Kind=FateKind.Escort,Position=Vector3.Zero,Radius=20};
+    var w=world with{Fates=[escort],CurrentFate=1,Synced=true,Objectives=[new(503,1,ObjectiveRole.Escort,new(2,0,0))]};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    var behind=w with{CurrentFate=0,Position=new(-30,0,0),Fates=[escort with{Position=new(10,0,0)}],Objectives=[new(503,1,ObjectiveRole.Escort,new(12,0,0))]};
+    for(int i=7;i<=15;i++) r.Tick(behind with{Position=new(-30+(i-7)*3,0,0)},i);
+    Assert(r.State==RunState.Fighting && r.IsRunning && rt.LastMove==new Vector3(12,0,0));
+});
 Test("1.3.2 escort defends its NPC from attackers the game did not tag with the FATE", () =>
 {
     var escort=fate with{Kind=FateKind.Escort,Position=Vector3.Zero,Radius=20};
