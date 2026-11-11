@@ -1,4 +1,10 @@
 {
+  "{0} fica mais perto de {1}: teleportando em vez de voar.": "{0} liegt näher an {1}: teleportiere statt zu fliegen.",
+  "Aguardando a próxima parte da cadeia de FATEs ({0} s).": "Warte auf den nächsten Teil der FATE-Kette ({0} s).",
+  "Continuação da cadeia: {0}.": "Kette geht weiter: {0}.",
+  "Teleportar para o aetheryte mais perto do FATE quando compensar": "Zum Ätheryten nahe am FATE teleportieren, wenn es sich lohnt",
+  "Um teleporte vale 200 yalms de voo. Se o aetheryte mais perto do FATE, somado a isso, sair mais barato que voar até lá, o FatePilot teleporta.": "Ein Teleport zählt wie 200 Yalm Flug. Ist der Ätheryt nahe am FATE plus dieser Wert günstiger als hinzufliegen, teleportiert FatePilot.",
+  "Esperar a continuação de FATEs em cadeia (segundos, 0 = não)": "Auf die Fortsetzung von Ketten-FATEs warten (Sekunden, 0 = nein)",
   "Lutando pelos itens do FATE ({0} na bolsa).": "Kämpfe um die FATE-Gegenstände ({0} im Inventar).",
   "Voltando para dentro do FATE.": "Laufe zurück ins FATE.",
   "Aproximando do alvo.": "Nähere mich dem Ziel.",

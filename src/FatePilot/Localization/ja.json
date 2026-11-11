@@ -1,4 +1,10 @@
 {
+  "{0} fica mais perto de {1}: teleportando em vez de voar.": "{0}は{1}の方が近いため、飛行せずテレポします。",
+  "Aguardando a próxima parte da cadeia de FATEs ({0} s).": "連続FATEの次を待っています（{0}秒）。",
+  "Continuação da cadeia: {0}.": "連続FATEの続き：{0}。",
+  "Teleportar para o aetheryte mais perto do FATE quando compensar": "得な場合はFATEに近いエーテライトへテレポ",
+  "Um teleporte vale 200 yalms de voo. Se o aetheryte mais perto do FATE, somado a isso, sair mais barato que voar até lá, o FatePilot teleporta.": "テレポは飛行200ヤルム分と見なします。FATEに最も近いエーテライト＋その分が飛行より短ければテレポします。",
+  "Esperar a continuação de FATEs em cadeia (segundos, 0 = não)": "連続FATEの続きを待つ（秒、0＝待たない）",
   "Lutando pelos itens do FATE ({0} na bolsa).": "FATEアイテムのために戦闘中（所持{0}）。",
   "Voltando para dentro do FATE.": "FATEの範囲内に戻ります。",
   "Aproximando do alvo.": "ターゲットに接近中。",

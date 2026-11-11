@@ -1,4 +1,10 @@
 {
+  "{0} fica mais perto de {1}: teleportando em vez de voar.": "{0} is closer to {1}: teleporting instead of flying.",
+  "Aguardando a próxima parte da cadeia de FATEs ({0} s).": "Waiting for the next part of the FATE chain ({0} s).",
+  "Continuação da cadeia: {0}.": "Chain continues: {0}.",
+  "Teleportar para o aetheryte mais perto do FATE quando compensar": "Teleport to the aetheryte closest to the FATE when it pays off",
+  "Um teleporte vale 200 yalms de voo. Se o aetheryte mais perto do FATE, somado a isso, sair mais barato que voar até lá, o FatePilot teleporta.": "A teleport is worth 200 yalms of flying. If the aetheryte closest to the FATE plus that is cheaper than flying there, FatePilot teleports.",
+  "Esperar a continuação de FATEs em cadeia (segundos, 0 = não)": "Wait for the next part of chain FATEs (seconds, 0 = no)",
   "Lutando pelos itens do FATE ({0} na bolsa).": "Fighting for the FATE's items ({0} in bags).",
   "Voltando para dentro do FATE.": "Walking back into the FATE.",
   "Aproximando do alvo.": "Closing in on the target.",

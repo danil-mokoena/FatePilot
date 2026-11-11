@@ -1,4 +1,10 @@
 {
+  "{0} fica mais perto de {1}: teleportando em vez de voar.": "{0} está más cerca de {1}: teletransportando en vez de volar.",
+  "Aguardando a próxima parte da cadeia de FATEs ({0} s).": "Esperando la siguiente parte de la cadena de FATEs ({0} s).",
+  "Continuação da cadeia: {0}.": "La cadena continúa: {0}.",
+  "Teleportar para o aetheryte mais perto do FATE quando compensar": "Teletransportarse al eterita más cercano al FATE cuando compense",
+  "Um teleporte vale 200 yalms de voo. Se o aetheryte mais perto do FATE, somado a isso, sair mais barato que voar até lá, o FatePilot teleporta.": "Un teletransporte vale 200 yalmos de vuelo. Si el eterita más cercano al FATE más eso sale más barato que volar, FatePilot se teletransporta.",
+  "Esperar a continuação de FATEs em cadeia (segundos, 0 = não)": "Esperar la continuación de FATEs en cadena (segundos, 0 = no)",
   "Lutando pelos itens do FATE ({0} na bolsa).": "Luchando por los objetos del FATE ({0} en el inventario).",
   "Voltando para dentro do FATE.": "Volviendo dentro del FATE.",
   "Aproximando do alvo.": "Acercándose al objetivo.",
