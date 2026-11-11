@@ -3,7 +3,7 @@
     "Author": "Mokoena",
     "Name": "FatePilot",
     "InternalName": "FatePilot",
-    "AssemblyVersion": "1.3.6.0",
+    "AssemblyVersion": "1.4.0.0",
     "Description": "Experimental FATE automation with combat, collection hand-ins, escorts, zone routes, instance rotation and return goals. See the README for required integrations. /fatepilot",
     "Punchline": "Chart your route. Find your destiny. By Mokoena.",
     "RepoUrl": "https://github.com/danil-mokoena/FatePilot",
@@ -18,9 +18,9 @@
     "IsHide": false,
     "IsTestingExclusive": false,
     "AcceptsFeedback": false,
-    "DownloadLinkInstall": "https://github.com/danil-mokoena/FatePilot/releases/download/v1.3.6/FatePilot-1.3.6-plugin.zip",
-    "DownloadLinkUpdate": "https://github.com/danil-mokoena/FatePilot/releases/download/v1.3.6/FatePilot-1.3.6-plugin.zip",
-    "DownloadLinkTesting": "https://github.com/danil-mokoena/FatePilot/releases/download/v1.3.6/FatePilot-1.3.6-plugin.zip",
-    "LastUpdate": 1794352057
+    "DownloadLinkInstall": "https://github.com/danil-mokoena/FatePilot/releases/download/v1.4.0/FatePilot-1.4.0-plugin.zip",
+    "DownloadLinkUpdate": "https://github.com/danil-mokoena/FatePilot/releases/download/v1.4.0/FatePilot-1.4.0-plugin.zip",
+    "DownloadLinkTesting": "https://github.com/danil-mokoena/FatePilot/releases/download/v1.4.0/FatePilot-1.4.0-plugin.zip",
+    "LastUpdate": 1794362216
   }
 ]
