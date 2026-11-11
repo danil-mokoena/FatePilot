@@ -29,7 +29,11 @@ public sealed partial class Runner(IRuntime runtime)
     private FateKey selectedKey;
     private bool participated, sawLoading, returning, waitingForPlayerDialog;
     private int interactionErrors, moveRetries;
-    private bool climbedWhileStuck, reviving;
+    private bool climbedWhileStuck, reviving, teleportShortcut;
+    // 1.5: chain FATEs — after one ends, wait for the next FATE of the same chain.
+    private uint chainId;
+    private ushort chainFrom;
+    private double chainUntil;
     private double deadSince;
     private double lastInteractionError = double.NegativeInfinity;
     private int nextInstance;
@@ -79,6 +83,7 @@ public sealed partial class Runner(IRuntime runtime)
             idleSince = noEnemySince = now;
             seenFates.Clear(); lastAppearance.Clear(); lastHistoryTick = zoneSince = now; idleMoved = false;
             retriesUsed = 0; retryReason = null;
+            chainId = 0; reviving = teleportShortcut = false;
             Enter(RunState.Selecting, L.T("Procurando FATEs elegíveis."), now);
         }
         catch (Exception ex) { Stop(L.T("Não foi possível iniciar: {0}", ex.GetBaseException().Message), true); }
@@ -235,6 +240,25 @@ public sealed partial class Runner(IRuntime runtime)
             Teleport(ReturnTarget, w, now);
             return;
         }
+        // 1.5: right after a chain FATE, stay put for its next part (it usually spawns right here).
+        if (chainId != 0)
+        {
+            if (now >= chainUntil) chainId = 0;
+            else
+            {
+                var chained = w.Fates.Where(c => c.Chain == chainId && c.Id != chainFrom).ToList();
+                var next = Selection.Choose(w with { Fates = chained }, options, excludedUntil, now);
+                if (next == null)
+                {
+                    Note(L.T("Aguardando a próxima parte da cadeia de FATEs ({0} s).", (int)Math.Ceiling(chainUntil - now)));
+                    return;
+                }
+                chainId = 0;
+                runtime.Log(L.T("Continuação da cadeia: {0}.", next.Name));
+                BeginFate(next, w, now);
+                return;
+            }
+        }
         if (TryRestock(w, now)) return;
         if (TryRepair(w, now)) return;
         if (TryAdvanceJobQueue(w, now)) return;
@@ -261,17 +285,7 @@ public sealed partial class Runner(IRuntime runtime)
             return;
         }
         var fate = Selection.Choose(w, options, excludedUntil, now);
-        if (fate != null)
-        {
-            Selected = fate;
-            idleMoved = false;
-            selectedKey = Selection.Key(fate, w);
-            participated = false;
-            ResetObjectives(fate, now);
-            noEnemySince = now;
-            Enter(RunState.Mounting, L.T("Preparando deslocamento: {0}", fate.Name), now);
-            return;
-        }
+        if (fate != null) { BeginFate(fate, w, now); return; }
         if (State != RunState.Waiting) { idleSince = now; Enter(RunState.Waiting, L.T("Aguardando FATEs elegíveis."), now); }
         if (TryIdleToHotspot(w, now)) return;
         if (now - idleSince < options.IdleSeconds) return;
@@ -296,6 +310,17 @@ public sealed partial class Runner(IRuntime runtime)
             runtime.Log(L.T("módulo de viagens ainda não conhece as instâncias. Abra uma vez o menu de troca no aetheryte."));
     }
 
+    private void BeginFate(FateInfo fate, World w, double now)
+    {
+        Selected = fate;
+        idleMoved = false;
+        selectedKey = Selection.Key(fate, w);
+        participated = false;
+        ResetObjectives(fate, now);
+        noEnemySince = now;
+        Enter(RunState.Mounting, L.T("Preparando deslocamento: {0}", fate.Name), now);
+    }
+
     private FateInfo? RefreshFate(World w, double now)
     {
         var current = w.Fates.FirstOrDefault(f => f.Id == Selected?.Id && (f.StartedAt == selectedKey.StartedAt || Selected.State == EventState.Preparing));
@@ -316,6 +341,10 @@ public sealed partial class Runner(IRuntime runtime)
             }
             else if (participated) { Unconfirmed++; History.For(expectedTerritory).Failed++; runtime.Log(L.T("FATE terminou/desapareceu sem confirmação de sucesso; não conta para a meta.")); }
             excludedUntil[selectedKey] = now + 300;
+            // 1.5: a chain FATE that ended well: its next part usually spawns right here.
+            if (current != null && Selected is { Chain: > 0 } chained && options.ChainWaitSeconds > 0
+                && (current.State == EventState.Ended || (current.Progress >= 100 && current.State != EventState.Failed)))
+            { chainId = chained.Chain; chainFrom = chained.Id; chainUntil = now + options.ChainWaitSeconds; }
             Selected = null;
             Enter(RunState.Selecting, L.T("Verificando o próximo FATE."), now);
             return null;
@@ -329,6 +358,14 @@ public sealed partial class Runner(IRuntime runtime)
         var f = RefreshFate(w, now);
         if (f == null) return;
         if (w.InCombat) { Enter(RunState.Landing, L.T("Preparando combate durante o deslocamento."), now); return; }
+        // 1.5: a far FATE close to another aetheryte of this zone: teleport there first.
+        if (Selection.CloserAetheryte(f.Position, w, options) is { } via)
+        {
+            teleportShortcut = true;
+            runtime.Log(L.T("{0} fica mais perto de {1}: teleportando em vez de voar.", f.Name, via.Destination.Name));
+            Teleport(via.Destination, w, now);
+            return;
+        }
         if (options.UseMount && Vector3.Distance(w.Position, f.Position) > 40 && !w.Mounted && now - since < 10)
         {
             if (!w.Casting && Throttle(now, 3)) { transitionUntil = now + 5; runtime.Mount(); }
@@ -543,7 +580,10 @@ public sealed partial class Runner(IRuntime runtime)
 
     private void Arrived(World w, double now)
     {
-        zoneSince = now; idleMoved = false;
+        // A shortcut teleport inside the same zone keeps the zone's time budget running.
+        if (!teleportShortcut) zoneSince = now;
+        teleportShortcut = false;
+        idleMoved = false;
         if (returning)
         {
             if (WantsTrader && GemstoneTraders.In(w.Territory) != null) { EnterTrader(w, now); return; }

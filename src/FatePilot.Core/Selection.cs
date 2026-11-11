@@ -44,9 +44,26 @@ public static class Selection
         .ThenByDescending(f => o.PreferBonus && f.Bonus)
         .ThenBy(f => f.Id).FirstOrDefault();
 
-    // Lower is better: distance, minus what a bonus is worth in yalms when rewards are preferred.
+    // Lower is better: travel cost, minus what a bonus is worth in yalms when rewards are preferred.
     public static float Score(FateInfo f, World w, RunOptions o) =>
-        Vector3.Distance(w.Position, f.Position) - (o.PreferRewards && f.Bonus ? o.BonusWorthYalms : 0);
+        TravelCost(f.Position, w, o) - (o.PreferRewards && f.Bonus ? o.BonusWorthYalms : 0);
+
+    // 1.5: a teleport is worth this many yalms of flying (loading screen, cast, mounting again).
+    public const float TeleportPenalty = 200;
+
+    // Flying straight there, or teleporting to the zone's aetheryte closest to it, whichever is cheaper.
+    public static float TravelCost(Vector3 target, World w, RunOptions o) =>
+        CloserAetheryte(target, w, o) is { } via ? Vector3.Distance(via.Position, target) + TeleportPenalty : Vector3.Distance(w.Position, target);
+
+    // The zone's aetheryte to teleport to first, when that beats flying straight to the target.
+    public static AetherytePoint? CloserAetheryte(Vector3 target, World w, RunOptions o)
+    {
+        if (!o.TeleportToCloserAetheryte) return null;
+        var direct = Vector3.Distance(w.Position, target);
+        var best = w.ZoneAetherytes.Where(a => a.Destination.TerritoryId == w.Territory)
+            .MinBy(a => Vector3.Distance(a.Position, target));
+        return best != null && Vector3.Distance(best.Position, target) + TeleportPenalty < direct ? best : null;
+    }
 
     public static int? NextInstance(int current, int count, ISet<int> visited)
     {

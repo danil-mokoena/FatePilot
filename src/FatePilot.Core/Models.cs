@@ -10,12 +10,15 @@ public enum ObjectiveRole { Starter, Recipient, Escort, Pickup }
 public sealed record ObjectiveActor(ulong Id, ushort FateId, ObjectiveRole Role, Vector3 Position, float Hitbox = 0);
 
 public sealed record Destination(uint TerritoryId, uint AetheryteId, string Name);
+public sealed record AetherytePoint(Destination Destination, Vector3 Position);
 public sealed record FateInfo(ushort Id, string Name, uint TerritoryId, EventState State, int Level,
     int MaxLevel, int Progress, float SecondsLeft, Vector3 Position, float Radius, bool IsCombat, bool Bonus, long StartedAt)
 {
     public FateKind Kind { get; init; }
     public FateKind EffectiveKind => Kind == FateKind.Unknown && IsCombat ? FateKind.Combat : Kind;
     public bool CanStart { get; init; }
+    // 1.5: chain group shared by the FATEs of one sequence (0 = not part of a chain).
+    public uint Chain { get; init; }
     public int HeldItems { get; init; }
     public int HandedIn { get; init; }
     public string? ObjectiveDiagnostic { get; init; }
@@ -34,6 +37,10 @@ public sealed class RunOptions
 {
     public List<Destination> Route { get; set; } = [];
     public bool RotateInstances { get; set; } = true;
+    // 1.5: teleport to a closer aetheryte of the zone when it beats flying there (200 yalms per teleport).
+    public bool TeleportToCloserAetheryte { get; set; } = true;
+    // 1.5: after a chain FATE, wait this long for the next one of the same chain (0 = off).
+    public int ChainWaitSeconds { get; set; } = 30;
     public bool UseMount { get; set; } = true;
     public bool UseFlight { get; set; } = true;
     public bool PreferBonus { get; set; } = true;
@@ -109,7 +116,7 @@ public sealed class RunOptions
             throw new InvalidOperationException(L.T("Os limites de gastos não podem ser negativos."));
         if (CollectionBatchSize is < 1 or > 99)
             throw new InvalidOperationException(L.T("O lote de coleta deve ter entre 1 e 99 itens."));
-        if (IdleSeconds < 10 || MinimumSecondsLeft < 0 || LevelAbovePlayer < 0 || MaximumProgress is < 1 or > 100 || ReturnAfterFates < 0)
+        if (ChainWaitSeconds is < 0 or > 120 || IdleSeconds < 10 || MinimumSecondsLeft < 0 || LevelAbovePlayer < 0 || MaximumProgress is < 1 or > 100 || ReturnAfterFates < 0)
             throw new InvalidOperationException(L.T("Os filtros de FATEs contêm valores inválidos."));
         if (ReturnAfterGemstones is < 0 or > 1000000 || ReturnAfterMinutes is < 0 or > 10080 || GemstoneCapReserve is < 0 or > 1000000)
             throw new InvalidOperationException(L.T("As metas de gemstones, tempo ou reserva contêm valores inválidos."));
@@ -226,6 +233,8 @@ public sealed record World
     // Facing, in radians (0 = south / +Z), used only to draw the player arrow on the map.
     public float Rotation { get; init; }
     public Vector3? NearbyAetheryte { get; init; }
+    // 1.5: unlocked aetherytes of the current zone with their positions (teleport-aware travel).
+    public IReadOnlyList<AetherytePoint> ZoneAetherytes { get; init; } = [];
     public bool TravelBusy { get; init; }
     public bool NavReady { get; init; }
     public bool NavBusy { get; init; }
