@@ -5,7 +5,22 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.3.6 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.4.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 1.4 — how FATEs are played, reworked
+
+A study of how the widely used open-source FATE farming scripts handle each kind of FATE led to a simpler, sturdier model:
+
+- **Positioning.** FatePilot now picks a spot at attack reach beside the target, on the target's own side and height, and walks there itself with the navigation module, measuring the real (3D) distance: 2.5 yalms for tanks and melee, 20 for ranged and casters, plus the target's size. Enemies below a ledge or up on a rock are reached instead of stared at; it never moves while casting and stops once in reach.
+- **Conversations with FATE NPCs.** Once FatePilot has talked to a verified FATE NPC or object, any conversation window opened while it is still your target is that conversation, whatever event the NPC runs: pages are advanced, the Item Request window is filled and handed over, and the start/hand-over Yes/No is accepted right after its pages. Any other question in that conversation is answered No. Windows of anyone else are never clicked, and an unrecognised window never stops the session.
+- **Collection FATEs.** Fight the FATE's monsters (their drops are the items), hand in a batch of 7 (adjustable) or whatever you carry once the FATE is ending, pick up objects only when there is nothing to fight, and hand in at once when there is nothing else to do.
+- **Escort and defence FATEs.** Fight the FATE's monsters and anything hitting you or its NPCs; otherwise stay with the escorted NPC, or simply inside the circle when it cannot be told apart. A FATE that keeps advancing is never abandoned.
+- **Knocked out of a FATE.** Any FATE (not only escorts): FatePilot walks straight back in instead of re-routing, and level-syncs again if needed.
+- **Arriving.** A path that ends inside the FATE lands there even when its centre sits on a rock; a path that ends short is retried; stuck while mounted, it rises 10 yalms and tries again.
+- **Death.** The session no longer stops: FatePilot accepts the game's return-to-home-point prompt (or a raise), waits until you are back on your feet and teleports back to the zone it was farming. While dead, that prompt is the only thing it clicks.
+- **Compact panel.** Continue shows as soon as a pause is requested (pauses wait for a safe moment) and cancels it, or resumes a paused session.
+
+173 local tests pass, with zero build warnings/errors.
 
 ### Fixed in 1.3.6
 
