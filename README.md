@@ -5,7 +5,14 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.4.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.5.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 1.5
+
+- **Chain FATEs.** When a FATE that belongs to a chain ends well, FatePilot stays where it is for its next part (30 seconds by default, Route → "Wait for the next part of chain FATEs"; 0 turns it off) instead of flying off to another FATE, and takes it as soon as it appears. The chain is read from the game's own FATE data.
+- **Teleport-aware travel.** FATEs are now chosen by travel cost, not straight-line distance: flying there, or teleporting to the zone's aetheryte closest to the FATE, whichever is cheaper (a teleport counts as 200 yalms of flying). When teleporting wins, FatePilot teleports first and flies the rest. On by default (Route → "Teleport to the aetheryte closest to the FATE when it pays off"); teleport costs follow your gil and ticket settings as usual.
+
+175 local tests pass, with zero build warnings/errors.
 
 ### New in 1.4 — how FATEs are played, reworked
 
