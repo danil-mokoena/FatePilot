@@ -5,6 +5,39 @@ namespace FatePilot.Core;
 public sealed partial class Runner
 {
     private RunState defenseResume;
+    public const float MeleeReach = 2.5f, RangedReach = 20f;
+    private Vector3? approachGoal;
+    private double lastApproach = double.NegativeInfinity;
+
+    // 1.4: attack an enemy and get within reach of it ourselves. The movement module measures its
+    // distance flat (X/Z only), so an enemy below a ledge or up on a rock counted as "in range" and
+    // the character just stood there. FatePilot now picks a spot at attack reach beside the enemy,
+    // on the enemy's own side and height (2.5 yalms for tanks and melee, 20 for ranged and casters,
+    // plus the enemy's size), measures the real 3D distance and walks there with the navigation
+    // module. It never moves while casting and stops once in reach.
+    private void Engage(World w, EnemyInfo e, double now)
+    {
+        runtime.Target(e.Id);
+        runtime.SetCombat(true);
+        if (w.Casting) return;
+        var reach = (w.MeleeJob ? MeleeReach : RangedReach) + e.Hitbox + 0.5f;
+        if (Vector3.Distance(w.Position, e.Position) <= reach + 1f)
+        {
+            if (approachGoal != null) { runtime.StopMovement(); approachGoal = null; }
+            return;
+        }
+        var away = w.Position - e.Position;
+        away.Y = 0;
+        var direction = away.LengthSquared() < 0.01f ? Vector3.UnitX : Vector3.Normalize(away);
+        var spot = e.Position + direction * MathF.Max(0.5f, reach - 0.5f);
+        if (approachGoal is { } goal && w.NavBusy && Vector3.Distance(goal, spot) < 3) return;
+        if (now - lastApproach < 1.5) return;
+        lastApproach = now;
+        approachGoal = spot;
+        Status = L.T("Aproximando do alvo.");
+        try { runtime.Move(spot, false); }
+        catch (InvalidOperationException) { approachGoal = null; }
+    }
 
     private bool HandleUnexpectedCombat(World w, double now)
     {
@@ -33,7 +66,7 @@ public sealed partial class Runner
             return true;
         }
         var threat = w.Enemies.Where(e => e.TargetingPlayer).MinBy(e => Vector3.Distance(w.Position, e.Position));
-        if (threat != null) { runtime.Target(threat.Id); runtime.SetCombat(true); }
+        if (threat != null) Engage(w, threat, now);
         else runtime.SetCombat(false);
         return true;
     }
@@ -45,8 +78,8 @@ public sealed partial class Runner
             (e.FateId == fate.Id || (e.FateId == 0 && Vector3.Distance(e.Position, fate.Position) <= fate.Radius)))
             .OrderByDescending(e => e.NameId == 6738).ThenBy(e => Vector3.Distance(w.Position, e.Position)).FirstOrDefault();
         if (enemy == null) return false;
-        runtime.StopMovement(); objectiveGoal = null;
-        runtime.Target(enemy.Id); runtime.SetCombat(true);
+        objectiveGoal = null;
+        Engage(w, enemy, now);
         noEnemySince = now;
         Status = L.T("Priorizando Forlorn Maiden / The Forlorn.");
         return true;

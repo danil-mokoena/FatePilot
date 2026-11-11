@@ -10,7 +10,6 @@ public sealed partial class Runner
     private ulong interactionActor;
     private ObjectiveRole? interactionRole;
     private int interactionAttempts;
-    private double heldSince;
     private bool delivering;
     private int lastObjectiveProgress = -1;
     private double lastStarterDiagnostic = -100;
@@ -25,7 +24,6 @@ public sealed partial class Runner
         interactionActor = 0;
         interactionRole = null;
         interactionAttempts = 0;
-        heldSince = fate.HeldItems > 0 ? now : -1;
         delivering = false;
         lastObjectiveProgress = fate.Progress;
         lastStarterDiagnostic = now - 10;
@@ -42,7 +40,7 @@ public sealed partial class Runner
             Enter(RunState.Syncing, L.T("Verificando sincronização de nível."), now);
             return;
         }
-        if (w.InCombat) { DefendObjective(w, f); return; }
+        if (w.InCombat) { DefendObjective(w, f, now); return; }
         var npc = w.Objectives.FirstOrDefault(a => a.FateId == f.Id && a.Role == ObjectiveRole.Starter);
         if (npc != null) ApproachAndInteract(w, npc, now);
         else if (now - lastStarterDiagnostic >= 10)
@@ -58,8 +56,7 @@ public sealed partial class Runner
     {
         if (f.HeldItems != previousItems || f.HandedIn != previousHandIns)
         {
-            if (f.HeldItems > 0 && previousItems == 0) heldSince = now;
-            if (f.HeldItems == 0) { heldSince = -1; delivering = false; }
+            if (f.HeldItems == 0) delivering = false;
             if (f.HandedIn > previousHandIns || (f.HeldItems < previousItems && interactionRole == ObjectiveRole.Recipient && now - lastInteraction < 15)) participated = true;
             previousItems = f.HeldItems;
             previousHandIns = f.HandedIn;
@@ -74,8 +71,8 @@ public sealed partial class Runner
         var threat = w.Enemies.Where(e => e.TargetingPlayer).MinBy(e => Vector3.Distance(w.Position, e.Position));
         if (threat != null)
         {
-            runtime.StopMovement(); objectiveGoal = null;
-            runtime.Target(threat.Id); runtime.SetCombat(true);
+            objectiveGoal = null;
+            Engage(w, threat, now);
             return;
         }
         if (w.OwnEventInteraction)
@@ -85,77 +82,68 @@ public sealed partial class Runner
             return;
         }
         var actors = w.Objectives.Where(a => a.FateId == f.Id).ToArray();
+        // 1.4: a FATE that keeps advancing is never abandoned for "no progress".
+        if (f.Progress != lastObjectiveProgress) { lastObjectiveProgress = f.Progress; objectiveProgressAt = now; }
         if (f.EffectiveKind == FateKind.Collection)
         {
+            // 1.4 collection flow: fight the FATE's monsters (their drops are the items), hand in a
+            // full batch or whatever is carried once the FATE is ending, and pick up objects only when
+            // there is nothing to fight. Nothing is attacking us here (handled above); the game's
+            // in-combat flag stays on while a pet or companion fights, so it gates nothing.
             var recipient = actors.FirstOrDefault(a => a.Role == ObjectiveRole.Recipient);
-            delivering |= f.HeldItems > 0 && (f.HeldItems >= options.CollectionBatchSize ||
-                PendingReturnGoal != ReturnGoal.None || (heldSince >= 0 && now - heldSince >= 45) || f.SecondsLeft < 90 || f.Progress >= 80 || f.State == EventState.Ending);
-            // 1.3.6: nothing is attacking us here (handled above). The game's in-combat flag stays
-            // on while a pet or companion fights, so it must not block collecting or handing in.
+            var pickup = actors.Where(a => a.Role == ObjectiveRole.Pickup).MinBy(a => Vector3.Distance(w.Position, a.Position));
+            var fateEnemy = w.Enemies.Any(e => e.FateId == f.Id);
+            var finishing = f.State == EventState.Ending || f.Progress >= 90 || f.SecondsLeft < 90 || PendingReturnGoal != ReturnGoal.None;
+            delivering |= f.HeldItems > 0 && (f.HeldItems >= options.CollectionBatchSize || finishing || (!fateEnemy && pickup == null));
             if (delivering && f.HeldItems > 0 && recipient != null)
             {
                 Status = L.T("Entregando itens do FATE: {0}", f.HeldItems);
                 ApproachAndInteract(w, recipient, now);
             }
-            else if (delivering && f.HeldItems > 0 && recipient == null)
+            else if (DefendObjective(w, f, now))
             {
-                // 1.3.1: never keep collecting silently when the items should be handed in.
-                if (!DefendObjective(w, f))
-                {
-                    runtime.SetCombat(false);
-                    Status = L.T("{0} itens prontos para entrega, mas o NPC de entrega do FATE não foi identificado.", f.HeldItems);
-                    if (now - lastStarterDiagnostic >= 10)
-                    {
-                        lastStarterDiagnostic = now;
-                        runtime.Log(Status + " " + f.ObjectiveDiagnostic);
-                    }
-                }
+                Status = L.T("Lutando pelos itens do FATE ({0} na bolsa).", f.HeldItems);
             }
-            else if (actors.Where(a => a.Role == ObjectiveRole.Pickup)
-                         .MinBy(a => Vector3.Distance(w.Position, a.Position)) is { } pickup)
+            else if (pickup != null && !(delivering && f.HeldItems > 0))
             {
                 Status = L.T("Recolhendo itens do FATE.");
                 ApproachAndInteract(w, pickup, now);
             }
-            else if (!DefendObjective(w, f))
+            else
             {
                 runtime.SetCombat(false);
-                Status = L.T("Aguardando itens ou inimigos do FATE.");
-                if (f.HeldItems > 0 && recipient == null)
-                    Status = L.T("Aguardando o NPC de entrega do FATE.");
+                StayInside(w, f, now);
+                Status = f.HeldItems > 0 && recipient == null
+                    ? L.T("{0} itens prontos para entrega, mas o NPC de entrega do FATE não foi identificado.", f.HeldItems)
+                    : L.T("Aguardando itens ou inimigos do FATE.");
+                if (f.HeldItems > 0 && recipient == null && now - lastStarterDiagnostic >= 10)
+                { lastStarterDiagnostic = now; runtime.Log(Status + " " + f.ObjectiveDiagnostic); }
             }
             if (now - objectiveProgressAt > 180)
                 SkipOrFail(L.T("Coleta sem progresso confirmado por 180 segundos."), now);
         }
         else
         {
-            if (DefendObjective(w, f)) return;
+            // 1.4 escort/defence: fight the FATE's monsters (and anything hitting us or its NPCs);
+            // otherwise stay with the escorted NPC, or simply inside the circle when it is not known.
+            if (DefendObjective(w, f, now)) return;
             runtime.SetCombat(false);
             var escort = actors.Where(a => a.Role == ObjectiveRole.Escort).MinBy(a => Vector3.Distance(w.Position, a.Position));
             if (escort != null)
             {
                 Status = L.T("Acompanhando o objetivo do FATE.");
                 ApproachObjective(w, escort.Position, Math.Max(4, escort.Hitbox + 3), now);
-                objectiveProgressAt = now;
             }
             else
             {
                 Status = L.T("Aguardando a próxima etapa do FATE.");
-                if (f.EffectiveKind == FateKind.Escort)
-                {
-                    Status = L.T("Procurando o NPC da escolta.");
-                    if (now - lastStarterDiagnostic >= 10) { lastStarterDiagnostic = now; runtime.Log(Status + " " + f.ObjectiveDiagnostic); }
-                }
-                // 1.3.5: an escort that keeps advancing is not lost, even before its NPC is identified.
-                if (f.Progress != lastObjectiveProgress) { lastObjectiveProgress = f.Progress; objectiveProgressAt = now; }
-                if (now - objectiveProgressAt > 120 && f.EffectiveKind == FateKind.Escort)
-                    SkipOrFail(L.T("Objetivo de escolta não encontrado."), now);
+                StayInside(w, f, now);
             }
         }
         if (now - since > 1800) SkipOrFail(L.T("Tempo máximo do objetivo excedido."), now);
     }
 
-    private bool DefendObjective(World w, FateInfo f)
+    private bool DefendObjective(World w, FateInfo f, double now)
     {
         // 1.3.2: enemies attacking this FATE's NPCs (escort, turn-in, defended NPC) count even when
         // the game did not tag them with the FATE; they come right after anything attacking us.
@@ -166,9 +154,17 @@ public sealed partial class Runner
             .OrderByDescending(e => e.TargetingPlayer).ThenByDescending(AttacksNpc)
             .ThenBy(e => Vector3.Distance(w.Position, e.Position)).FirstOrDefault();
         if (enemy == null) return false;
-        runtime.StopMovement(); objectiveGoal = null;
-        runtime.Target(enemy.Id); runtime.SetCombat(true);
+        objectiveGoal = null;
+        Engage(w, enemy, now);
         return true;
+    }
+
+    // Idle inside the FATE: drift back toward the centre when near the edge (moving circles included).
+    private void StayInside(World w, FateInfo f, double now)
+    {
+        var flat = Vector2.Distance(new(w.Position.X, w.Position.Z), new(f.Position.X, f.Position.Z));
+        if (flat > f.Radius * 0.6f) ApproachObjective(w, f.Position, Math.Max(5, f.Radius * 0.3f), now);
+        else lastMotion = now;
     }
 
     private void ApproachAndInteract(World w, ObjectiveActor actor, double now)

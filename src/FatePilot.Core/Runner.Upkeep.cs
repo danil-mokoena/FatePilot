@@ -34,9 +34,12 @@ public sealed partial class Runner
         return true;
     }
 
+    // 1.4: a pause waiting for a safe moment, so the panel can show it and offer to cancel it.
+    public bool PausePending => pauseRequested && !IsPaused;
+
     public void Resume(World w, double now)
     {
-        if (!IsPaused) return;
+        if (!IsPaused) { pauseRequested = false; return; }
         if (!w.LoggedIn || w.Loading || w.Dead || w.Restricted || w.InCombat || w.Occupied || w.DialogueOpen || w.Casting)
         { Status = L.T("Para continuar, fique fora de combate e com os diálogos fechados."); return; }
         if (w.Job is 0 or (>= 8 and <= 18))

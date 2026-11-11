@@ -30,7 +30,10 @@ public sealed class InteractionLease
         lastOwned = double.NegativeInfinity;
     }
 
-    public InteractionStatus Observe(double now, bool occupiedOrDialog, EventSignal first, EventSignal second, bool matchingSelector, ulong sceneObject = 0, bool matchingLocalDialog = false)
+    // actorTargeted (1.4): the player's target is still the verified FATE NPC/object we just interacted
+    // with. A conversation window open in that state is ours, whatever event the NPC runs for it —
+    // the same rule the widely used FATE farming scripts rely on.
+    public InteractionStatus Observe(double now, bool occupiedOrDialog, EventSignal first, EventSignal second, bool matchingSelector, ulong sceneObject = 0, bool matchingLocalDialog = false, bool actorTargeted = false)
     {
         if (!Active) return InteractionStatus.None;
         if (now - started >= MaxSeconds) { Cancel(); return InteractionStatus.Expired; }
@@ -40,7 +43,7 @@ public sealed class InteractionLease
             if (observed || now - started >= 3) { Cancel(); return InteractionStatus.None; }
             return InteractionStatus.Waiting;
         }
-        if (Matches(first, sceneObject) || Matches(second, sceneObject) || matchingSelector ||
+        if (Matches(first, sceneObject) || Matches(second, sceneObject) || matchingSelector || actorTargeted ||
             (matchingLocalDialog && first.IsEmpty && second.IsEmpty && sceneObject is 0 or 0xE0000000))
         {
             observed = true;

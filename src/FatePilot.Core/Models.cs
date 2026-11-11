@@ -39,7 +39,7 @@ public sealed class RunOptions
     public bool PreferBonus { get; set; } = true;
     public bool PrioritizeForlorn { get; set; } = true;
     public bool IncludeCollection { get; set; } = true;
-    public int CollectionBatchSize { get; set; } = 15;
+    public int CollectionBatchSize { get; set; } = 7;
     public bool IncludeEscort { get; set; } = true;
     public bool ExcludeGroupBosses { get; set; } = true;
     public int LevelAbovePlayer { get; set; } = 3;
@@ -237,6 +237,8 @@ public sealed record World
     public bool EventInteractionPending { get; init; }
     public bool DialogueOpen { get; init; }
     public string? EventInteractionError { get; init; }
+    // 1.4: tank or melee job (fights at 2.5 yalms); everything else fights from 20.
+    public bool MeleeJob { get; init; }
     public string? InteractionDiagnostic { get; init; }
     public int Gemstones { get; init; }
     public int GemstoneCap { get; init; }
@@ -273,6 +275,8 @@ public interface IRuntime
     void Target(ulong id);
     void Teleport(Destination destination);
     void ConfirmTeleport();
+    // 1.4: while the character is dead, accept the game's return-to-home-point (or raise) prompt.
+    void AcceptRespawn();
     void ChangeInstance(int instance);
     void AethernetTeleport(uint shardId);
     void Log(string message);

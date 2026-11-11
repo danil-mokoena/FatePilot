@@ -28,7 +28,9 @@ public sealed partial class Runner(IRuntime runtime)
     private uint expectedTerritory;
     private FateKey selectedKey;
     private bool participated, sawLoading, returning, waitingForPlayerDialog;
-    private int interactionErrors;
+    private int interactionErrors, moveRetries;
+    private bool climbedWhileStuck, reviving;
+    private double deadSince;
     private double lastInteractionError = double.NegativeInfinity;
     private int nextInstance;
     private Destination? teleportDestination;
@@ -110,7 +112,7 @@ public sealed partial class Runner(IRuntime runtime)
                 previousGemstones = w.Gemstones;
             }
             if (!w.LoggedIn && !w.Loading) { Stop(L.T("Sessão encerrada: personagem desconectado."), true); return; }
-            if (w.Dead) { Stop(L.T("Personagem derrotado. Resolva a recuperação e inicie novamente."), true); return; }
+            if (State != RunState.Paused && TickDeath(w, now)) return;
             if (w.Restricted) { Stop(L.T("Automação encerrada ao entrar em conteúdo instanciado/PvP."), true); return; }
             if (w.Job != 0 && w.Job != sessionJob && State is not (RunState.Paused or RunState.SwitchingJob or RunState.Retrying or RunState.Buying)) { Stop(L.T("A classe mudou durante a sessão."), true); return; }
             if (State == RunState.Paused) { lastHistoryTick = now; return; }
@@ -219,7 +221,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (w.InCombat)
         {
             var threat = w.Enemies.Where(e => e.TargetingPlayer).MinBy(e => Vector3.Distance(w.Position, e.Position));
-            if (threat != null) { runtime.Target(threat.Id); runtime.SetCombat(true); }
+            if (threat != null) Engage(w, threat, now);
             if (now - since > 120) Stop(L.T("Não foi possível sair do combate para continuar a rota."), true);
             return;
         }
@@ -336,6 +338,7 @@ public sealed partial class Runner(IRuntime runtime)
         runtime.Move(f.Position, options.UseFlight && w.CanFly && w.Mounted);
         lastPosition = w.Position;
         lastMotion = now;
+        moveRetries = 0; climbedWhileStuck = false;
         Enter(RunState.Moving, L.T("Indo para {0}", f.Name), now);
     }
 
@@ -352,10 +355,30 @@ public sealed partial class Runner(IRuntime runtime)
             return;
         }
         if (Vector3.Distance(w.Position, lastPosition) > 2) { lastPosition = w.Position; lastMotion = now; }
-        // A moving FATE (escort) arrives somewhere else than where we were sent: follow it.
-        if (!w.NavBusy && now - since > 3 && f.EffectiveKind == FateKind.Escort && now - since < 240 && now - lastMotion <= 25)
+        var flat = Vector2.Distance(new(w.Position.X, w.Position.Z), new(f.Position.X, f.Position.Z));
+        if (!w.NavBusy && now - since > 3)
         {
-            if (Throttle(now, 2)) runtime.Move(f.Position, false);
+            // 1.4: the path ended inside the FATE (its centre can sit on a rock or in the air): land here.
+            if (w.CurrentFate == f.Id || flat < f.Radius)
+            {
+                Enter(RunState.Landing, L.T("Pousando e desmontando."), now);
+                return;
+            }
+            // Short of it (a moving escort circle, a partial path): try again a few times before giving up.
+            if (moveRetries < 3 && now - lastMotion <= 25 && now - since < 240)
+            {
+                if (Throttle(now, 2)) { moveRetries++; runtime.Move(f.Position, options.UseFlight && w.CanFly && w.Mounted); }
+                return;
+            }
+        }
+        // 1.4: stuck while mounted (a ledge, a tree): rise 10 yalms once and try again.
+        if (w.Mounted && w.NavBusy && now - lastMotion > 10 && !climbedWhileStuck)
+        {
+            climbedWhileStuck = true;
+            runtime.StopMovement();
+            runtime.Move(w.Position + new Vector3(0, 10, 0), options.UseFlight && w.CanFly);
+            lastMotion = now;
+            Note(L.T("Preso no caminho; subindo um pouco para contornar."));
             return;
         }
         if (now - lastMotion > 25 || now - since > 240 || (!w.NavBusy && now - since > 3))
@@ -409,14 +432,21 @@ public sealed partial class Runner(IRuntime runtime)
         // 1.3.5: an escort's circle moves with the NPC. Falling behind it is not "leaving the FATE":
         // walk after the escort (or the moving centre) instead of re-routing, which used to give up
         // and pick another FATE.
-        if (w.CurrentFate != f.Id && f.EffectiveKind == FateKind.Escort && !w.InCombat
+        // 1.4: pushed out of any FATE (knock-back, chasing a monster, a moving circle): walk straight
+        // back in instead of re-routing, as long as nothing is attacking us.
+        if (w.CurrentFate != f.Id && !finalHandIn && !w.Enemies.Any(e => e.TargetingPlayer)
             && Vector3.Distance(w.Position, f.Position) <= f.Radius + 80)
         {
             runtime.SetCombat(false);
             var escort = w.Objectives.Where(a => a.FateId == f.Id && a.Role == ObjectiveRole.Escort)
                 .MinBy(a => Vector3.Distance(w.Position, a.Position));
-            Status = L.T("Acompanhando o objetivo do FATE.");
+            Status = L.T("Voltando para dentro do FATE.");
             ApproachObjective(w, escort?.Position ?? f.Position, escort != null ? Math.Max(4, escort.Hitbox + 3) : 5, now);
+            return;
+        }
+        if (w.CurrentFate == f.Id && w.Level > f.MaxLevel && !w.Synced)
+        {
+            Enter(RunState.Syncing, L.T("Verificando sincronização de nível."), now);
             return;
         }
         if (w.CurrentFate != f.Id && !finalHandIn)
@@ -439,8 +469,7 @@ public sealed partial class Runner(IRuntime runtime)
         if (enemy != null)
         {
             noEnemySince = now;
-            runtime.Target(enemy.Id);
-            runtime.SetCombat(true);
+            Engage(w, enemy, now);
         }
         else
         {
