@@ -114,14 +114,28 @@ Test("1.3.1 collection never keeps picking up silently when the batch is ready b
     r.Tick(w with{Objectives=[new(601,1,ObjectiveRole.Pickup,Vector3.Zero),new(502,1,ObjectiveRole.Recipient,Vector3.Zero)]},10);
     Assert(rt.Interactions.Count==1 && rt.Interactions[0].Id==502);
 });
+Test("1.4 collection fights for drops, collects only when idle and hands in a batch or when idle", () =>
+{
+    var collect=fate with{Kind=FateKind.Collection,HeldItems=4,Position=Vector3.Zero};
+    var recipient=new ObjectiveActor(502,1,ObjectiveRole.Recipient,Vector3.Zero);
+    var pickup=new ObjectiveActor(504,1,ObjectiveRole.Pickup,Vector3.Zero);
+    var mob=new EnemyInfo(90,1,new(3,0,0),1,false);
+    var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[recipient,pickup],Enemies=[mob]};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++)r.Tick(w,i);
+    Assert(rt.Interactions.Count==0 && rt.LastTarget==90 && rt.CombatEnabled);
+    r.Tick(w with{Enemies=[]},10);
+    Assert(rt.Interactions.Count==1 && rt.Interactions[0].Role==ObjectiveRole.Pickup);
+    r.Tick(w with{Fates=[collect with{HeldItems=7}]},14);
+    Assert(rt.Interactions.Last().Role==ObjectiveRole.Recipient);
+});
 Test("Collection periodically delivers a partial batch without assuming completion", () =>
 {
     var collect=fate with{Kind=FateKind.Collection,HeldItems=4,Position=Vector3.Zero};
     var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[new(502,1,ObjectiveRole.Recipient,Vector3.Zero)]};
     var (r,rt)=Started(w);
     for(int i=1;i<=6;i++)r.Tick(w,i);
-    Assert(rt.Interactions.Count==0);
-    r.Tick(w,47);
+    // 1.4: nothing to fight or pick up: the partial batch is handed in right away.
     Assert(rt.Interactions.Count==1 && r.Completed==0);
     r.Tick(w with{Fates=[collect with{HeldItems=0,HandedIn=4,Progress=20}]},48);
     Assert(r.IsRunning && r.Completed==0);
@@ -160,6 +174,45 @@ Test("Escort follows its objective without the combat-only idle timeout", () =>
     Assert(rt.LastMove==new Vector3(20,0,0));
     r.Tick(w with{Position=new(18,0,0)},70);
     Assert(r.State==RunState.Fighting && !rt.CombatEnabled);
+});
+Test("1.4 an enemy below a ledge is reached at a spot beside it, on its own height", () =>
+{
+    var f0=fate with{Position=Vector3.Zero};
+    var w=world with{Fates=[f0],CurrentFate=1,Synced=true,MeleeJob=true};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    var below=new EnemyInfo(77,1,new(1,-8,0),1,false);
+    r.Tick(w with{Enemies=[below]},7);
+    Assert(rt.LastTarget==77 && rt.CombatEnabled && rt.LastMove==new Vector3(-2.5f,-8,0));
+    var moves=rt.Moves;
+    r.Tick(w with{Enemies=[below with{Position=new(1,0,0)}]},9);
+    Assert(rt.Moves==moves && rt.CombatEnabled);
+    var ranged=w with{MeleeJob=false,Enemies=[new EnemyInfo(78,1,new(15,0,0),1,false)]};
+    r.Tick(ranged,11);
+    Assert(rt.Moves==moves && rt.LastTarget==78);
+});
+Test("1.4 knocked out of a combat FATE walks straight back in", () =>
+{
+    var f0=fate with{Position=Vector3.Zero,Radius=20};
+    var w=world with{Fates=[f0],CurrentFate=1,Synced=true};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    r.Tick(w with{CurrentFate=0,Position=new(30,0,0)},7);
+    Assert(r.State==RunState.Fighting && rt.LastMove==Vector3.Zero);
+});
+Test("1.4 death accepts the return prompt and comes back to the farmed zone", () =>
+{
+    var f0=fate with{Position=Vector3.Zero};
+    var w=world with{Fates=[f0],CurrentFate=1,Synced=true};
+    var o=Options(); o.Route=[zone1];
+    var (r,rt)=Started(w,o);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    r.Tick(w with{Dead=true},7); r.Tick(w with{Dead=true},10);
+    Assert(r.IsRunning && rt.Respawns>=1 && r.Selected==null);
+    r.Tick(w with{Loading=true,Territory=129},12);
+    Assert(r.IsRunning);
+    r.Tick(w with{Territory=129,Fates=[]},14);
+    Assert(r.IsRunning && r.State==RunState.Teleporting);
 });
 Test("1.3.5 falling behind a moving escort follows the NPC instead of giving up on the FATE", () =>
 {
@@ -428,7 +481,7 @@ Test("Zone cycle wraps and a one-zone route does not teleport to itself", () =>
     Assert(Selection.NextZone([zone1,zone2],1001)==zone1);
     Assert(Selection.NextZone([zone1],1000)==null);
 });
-Test("Death stops all automation", () => { var (r,f)=Started(); r.Tick(world with { Dead=true },1); Assert(r.State==RunState.Faulted && f.Ends==1); });
+Test("1.4 death accepts the return prompt instead of stopping", () => { var (r,f)=Started(); r.Tick(world with { Dead=true },1); Assert(r.IsRunning && f.Respawns==1 && f.Ends==0 && f.Notifications.Any(n=>n.Kind==NotifyKind.Problem)); });
 Test("Logout stops all automation", () => { var (r,f)=Started(); r.Tick(world with { LoggedIn=false },1); Assert(!r.IsRunning && f.Ends==1); });
 Test("Duty and PvP stop all automation", () => { var (r,f)=Started(); r.Tick(world with { Restricted=true },1); Assert(!r.IsRunning && f.Ends==1); });
 Test("Unexpected zone change stops", () => { var (r,f)=Started(); r.Tick(world with { Territory=1001 },1); Assert(!r.IsRunning && f.Ends==1); });
@@ -689,10 +742,10 @@ Test("A recoverable interruption releases control, waits and resumes, within the
     r.Tick(world with { Territory=1002 },30);
     Assert(!r.IsRunning, "Second interruption beyond the limit stops");
 });
-Test("Death and duty entry never retry", () =>
+Test("Duty entry never retries; death is handled by the return prompt", () =>
 {
     var o=Options(); o.AutoRetry=true;
-    var (r,_)=Started(world,o); r.Tick(world with { Dead=true },1); Assert(!r.IsRunning);
+    var (r,_)=Started(world,o); r.Tick(world with { Dead=true },1); Assert(r.IsRunning && r.State!=RunState.Retrying);
     (r,_)=Started(world,o); r.Tick(world with { Restricted=true },1); Assert(!r.IsRunning);
 });
 Test("Notifications: stop, goal and a prioritized FATE appearing; none for a user stop", () =>
@@ -705,9 +758,9 @@ Test("Notifications: stop, goal and a prioritized FATE appearing; none for a use
     r.Tick(inside with { Fates=[fate with { Progress=100 }] },7); r.Tick(inside with { InCombat=false, Fates=[] },8);
     Assert(f.Notifications.Any(n=>n.Kind==NotifyKind.Goal));
     r.Stop(); Assert(!f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped), "User stop is not announced");
-    (r,f)=Started(world,o); r.Tick(world with { Dead=true },1);
+    (r,f)=Started(world,o); r.Tick(world with { Restricted=true },1);
     Assert(f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped));
-    o.NotifyOnStop=false; (r,f)=Started(world,o); r.Tick(world with { Dead=true },1);
+    o.NotifyOnStop=false; (r,f)=Started(world,o); r.Tick(world with { Restricted=true },1);
     Assert(!f.Notifications.Any(n=>n.Kind==NotifyKind.Stopped), "Respects the setting");
 });
 Test("Session summary is kept after stopping", () =>
@@ -801,8 +854,9 @@ Test("A reached goal flushes a partial collection batch before returning", () =>
     var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[npc]};
     var (r,rt)=Started(w,o);
     for(var i=1;i<=6;i++) r.Tick(w,i);
-    Assert(rt.Interactions.Count==0);
-    r.Tick(w,60); Assert(rt.Interactions.Count==1 && rt.Teleports.Count==0 && r.PendingReturnGoal==ReturnGoal.Time);
+    // 1.4: with nothing to fight or pick up, the partial batch goes in right away.
+    Assert(rt.Interactions.Count==1);
+    r.Tick(w,60); Assert(rt.Interactions.Count>=1 && rt.Teleports.Count==0 && r.PendingReturnGoal==ReturnGoal.Time);
     r.Tick(w with{Fates=[collect with{HeldItems=0,HandedIn=2}]},61);
     Assert(rt.Teleports.Count==0 && r.IsRunning);
     r.Tick(w with{Fates=[collect with{HeldItems=0,HandedIn=2,State=EventState.Ended,Progress=100}]},62);
@@ -1252,7 +1306,7 @@ Test("Low greens waits until the active FATE is over", () =>
 Test("Stop and death prevent further restock actions", () =>
 {
     var (r,rt,s)=AtGreensShop(); r.Stop(); r.Tick(s,7); Assert(rt.Purchases.Count==0);
-    (r,rt,s)=AtGreensShop(); r.Tick(s with{Dead=true},7); Assert(rt.Purchases.Count==0 && !r.IsRunning);
+    (r,rt,s)=AtGreensShop(); r.Tick(s with{Dead=true},7); Assert(rt.Purchases.Count==0 && rt.Respawns==1);
 });
 Test("Restock opening and navigation have finite deadlines", () =>
 {
@@ -1586,6 +1640,8 @@ sealed class Fake : IRuntime
     public void Target(ulong id) { LastTarget=id; }
     public void Teleport(Destination d)=>Teleports.Add(d);
     public void ConfirmTeleport()=>Confirmations++;
+    public int Respawns;
+    public void AcceptRespawn()=>Respawns++;
     public void ChangeInstance(int instance)=>Instances.Add(instance);
     public int Suspends, Resumes, FoodUses, RepairStarts;
     public readonly List<int> Gearsets=[];
