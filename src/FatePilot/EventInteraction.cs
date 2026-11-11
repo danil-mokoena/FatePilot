@@ -22,6 +22,7 @@ internal sealed unsafe class EventInteraction(Action<string> log)
     private readonly LocalDialogueGuard localDialogue = new();
     private long lastAdvance;
     private double interactionSentAt = double.NegativeInfinity;
+    private double lastOwnTalk = double.NegativeInfinity;
     private InteractionStatus lastStatus;
     private string localEvidence = "not checked";
     private static double Now => Environment.TickCount64 / 1000d;
@@ -157,7 +158,9 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         var second = framework == null ? default : new EventSignal(framework->EventState2.ObjectId.Id, framework->EventState2.EventId.Id);
         var sceneObject = framework == null ? 0 : framework->SceneGameObjectId.Id;
         var local = MatchingLocalDialogue(first.IsEmpty && second.IsEmpty && sceneObject is 0 or 0xE0000000);
-        var result = lease.Observe(Now, occupied || DialogueOpen, first, second, MatchingSelectorIndex() >= 0, sceneObject, local);
+        var targeted = Services.Targets.Target?.GameObjectId == owned.Id;
+        if (targeted && Visible("Talk")) lastOwnTalk = Now;
+        var result = lease.Observe(Now, occupied || DialogueOpen, first, second, MatchingSelectorIndex() >= 0, sceneObject, local, targeted);
         if (result != lastStatus)
         {
             if (result == InteractionStatus.Owned) log(L.T("Diálogo do FATE {0} reconhecido.", owned.FateId));
@@ -234,7 +237,16 @@ internal sealed unsafe class EventInteraction(Action<string> log)
             return;
         }
         var yesno = (AtkUnitBase*)Services.GameGui.GetAddonByName("SelectYesno").Address;
-        if (yesno != null && yesno->IsVisible) yesno->FireCallbackInt(0);
+        if (yesno == null || !yesno->IsVisible) return;
+        // 1.4: a Yes/No is the FATE's (start, hand-over) only right after its own pages or our own
+        // interaction. Anything else that shows up while the NPC is targeted is declined, never accepted.
+        if (Now - lastOwnTalk <= LocalDialogueGuard.ConfirmWindow || Now - interactionSentAt <= LocalDialogueGuard.ConfirmWindow)
+            yesno->FireCallbackInt(0);
+        else
+        {
+            log(L.T("Pergunta inesperada durante a conversa com o NPC do FATE; respondida com Não."));
+            yesno->FireCallbackInt(1);
+        }
     }
 
     // 1.3.4: the FATE turn-in "Item Request" window, inside our own conversation with the verified

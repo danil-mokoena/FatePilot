@@ -121,8 +121,18 @@ internal sealed partial class MainWindow
         if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Stop, L.T("Parar") + "###compactStop")) request("stop");
         ImGui.PopStyleColor(4);
         ImGui.SameLine();
-        if (runner.IsPaused)
-        { if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Play, L.T("Continuar") + "###compactResume")) request("resume"); }
+        // 1.4: Continue appears as soon as a pause is asked for (it may wait for a safe moment), and
+        // cancels the pending pause or resumes the paused session.
+        if (runner.IsPaused || runner.PausePending)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Button, Success with { W = .16f });
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Success with { W = .3f });
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, Success with { W = .42f });
+            ImGui.PushStyleColor(ImGuiCol.Text, Success);
+            if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Play, L.T("Continuar") + "###compactResume")) request("resume");
+            ImGui.PopStyleColor(4);
+            if (runner.PausePending && ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Pausa pendente: o FatePilot pausa assim que for seguro. Clique para cancelar."));
+        }
         else if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Pause, L.T("Pausar") + "###compactPause")) request("pause");
         ImGui.SameLine();
         ImGui.BeginDisabled(f == null);

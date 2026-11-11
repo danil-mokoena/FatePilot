@@ -229,6 +229,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             CanChangeInstance = Optional(IntegrationIds.TravelCanChangeInstance, false), TravelBusy = Optional(IntegrationIds.TravelIsBusy, false),
             NavReady = Optional(IntegrationIds.NavigationNavIsReady, false), NavBusy = session && nav.Busy, NavError = nav.Error,
             Position = player.Position, Rotation = player.Rotation, NearbyAetheryte = nearestHub, Fates = fates, Enemies = enemies,
+            MeleeJob = player.ClassJob.ValueNullable?.Role is 1 or 2,
             Objectives = objectives, OwnEventInteraction = interactionStatus == InteractionStatus.Owned,
             EventInteractionPending = interactionStatus == InteractionStatus.Waiting,
             EventInteractionError = interactionStatus == InteractionStatus.Foreign ? L.T("O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.") :
@@ -361,6 +362,14 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
         travel.Teleport(destination);
     }
     public void ConfirmTeleport() => travel.ConfirmArrival();
+    // Only while the local player is dead: the one Yes/No the game shows then is the return-to-home-point
+    // prompt (or a raise offer). Nothing else is clicked.
+    public unsafe void AcceptRespawn()
+    {
+        if (Services.Objects.LocalPlayer is not { IsDead: true }) return;
+        var yesno = (FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase*)Services.GameGui.GetAddonByName("SelectYesno").Address;
+        if (yesno != null && yesno->IsVisible) yesno->FireCallbackInt(0);
+    }
     public void ChangeInstance(int instance)
     {
         ownsTravelService = true;
