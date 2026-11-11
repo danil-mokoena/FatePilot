@@ -232,6 +232,14 @@ internal sealed partial class MainWindow(Configuration config, Runner runner, Ga
         if (ImGui.SliderInt(L.T("Espera sem FATEs (segundos)"), ref idle, 10, 180)) { config.Options.IdleSeconds = idle; SaveSettings(); }
         ImGui.TextWrapped(L.T("Para descobrir as instâncias, abra uma vez o menu de troca no aetheryte. Ative o Instance Switcher no módulo de viagens."));
         ImGui.TextDisabled(L.T("Zona: {0}  |  Instância: {1}/{2}", World.Territory, World.Instance, World.InstanceCount));
+        // 1.5: travel shortcuts and chain FATEs.
+        ImGui.Separator();
+        var shortcut = config.Options.TeleportToCloserAetheryte;
+        if (ImGui.Checkbox(L.T("Teleportar para o aetheryte mais perto do FATE quando compensar"), ref shortcut)) { config.Options.TeleportToCloserAetheryte = shortcut; SaveSettings(); }
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.T("Um teleporte vale 200 yalms de voo. Se o aetheryte mais perto do FATE, somado a isso, sair mais barato que voar até lá, o FatePilot teleporta."));
+        var chain = config.Options.ChainWaitSeconds;
+        ImGui.SetNextItemWidth(160 * ImGuiHelpers.GlobalScale);
+        if (ImGui.SliderInt(L.T("Esperar a continuação de FATEs em cadeia (segundos, 0 = não)"), ref chain, 0, 60)) { config.Options.ChainWaitSeconds = chain; SaveSettings(); }
     }
 
     private void DrawSelectedRoute()

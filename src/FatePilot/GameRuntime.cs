@@ -189,6 +189,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
                     ObjectiveDiagnostic = $"FATE={f.FateId}; starterRef={native->MotivationNpc:X8}; recipientRef={native->ObjectiveNpc:X8}; array={native->ArrayEventHandler.Id:X8}; starters={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Starter)}; recipients={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Recipient)}; pickups={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Pickup)}; escorts={objectives.Count(o => o.FateId == f.FateId && o.Role == ObjectiveRole.Escort)}; rule={native->Rule}; item={native->EventItem}; objectiveIcon={native->FateModeObjectiveIcon}",
                     HeldItems = native->Rule == 2 ? EventInteraction.ItemCount(native->TurnInEventItem != 0 ? native->TurnInEventItem : native->EventItem != 0 ? native->EventItem : native->ReqEventItem) : 0,
                     HandedIn = native->HandInCount,
+                    Chain = native->FATEChain,
                 });
             }
             foreach (var obj in Services.Objects)
@@ -230,6 +231,7 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
             NavReady = Optional(IntegrationIds.NavigationNavIsReady, false), NavBusy = session && nav.Busy, NavError = nav.Error,
             Position = player.Position, Rotation = player.Rotation, NearbyAetheryte = nearestHub, Fates = fates, Enemies = enemies,
             MeleeJob = player.ClassJob.ValueNullable?.Role is 1 or 2,
+            ZoneAetherytes = loading ? [] : ZoneAetherytes(territory),
             Objectives = objectives, OwnEventInteraction = interactionStatus == InteractionStatus.Owned,
             EventInteractionPending = interactionStatus == InteractionStatus.Waiting,
             EventInteractionError = interactionStatus == InteractionStatus.Foreign ? L.T("O diálogo não corresponde ao NPC e ao evento esperados. Consulte o diagnóstico.") :
@@ -305,6 +307,25 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
     public void TalkTo(VendorActor trader) { gemstoneShop.Reset(); gemstoneShop.TalkTo(trader); }
 
     public GemstoneBuyStep BuyGemstones(uint itemId, string name, int quantity) => gemstoneShop.Step(itemId, name, quantity);
+
+    // 1.5: unlocked aetherytes of a zone with their world positions (from the game's level data).
+    private uint aetheryteZone;
+    private double aetheryteRead = double.NegativeInfinity;
+    private List<AetherytePoint> zoneAetherytes = [];
+    private List<AetherytePoint> ZoneAetherytes(uint territory)
+    {
+        var now = Environment.TickCount64 / 1000d;
+        if (territory == aetheryteZone && now - aetheryteRead < 30) return zoneAetherytes;
+        aetheryteZone = territory; aetheryteRead = now;
+        var sheet = Services.Data.GetExcelSheet<Aetheryte>();
+        zoneAetherytes = Destinations().Where(d => d.TerritoryId == territory).Select(d =>
+        {
+            var row = sheet.GetRowOrDefault(d.AetheryteId);
+            if (row is not { } a || a.Territory.RowId != territory || a.Level.Count == 0 || a.Level[0].ValueNullable is not { } level) return null;
+            return new AetherytePoint(d, new Vector3(level.X, level.Y, level.Z));
+        }).Where(p => p != null).Select(p => p!).ToList();
+        return zoneAetherytes;
+    }
 
     public List<Destination> Destinations()
     {
