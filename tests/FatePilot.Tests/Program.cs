@@ -191,6 +191,35 @@ Test("1.4 an enemy below a ledge is reached at a spot beside it, on its own heig
     r.Tick(ranged,11);
     Assert(rt.Moves==moves && rt.LastTarget==78);
 });
+Test("1.5 a far FATE next to another aetheryte of the zone is reached by teleporting there", () =>
+{
+    var far=fate with{Position=new(900,0,0)};
+    var hub=new AetherytePoint(zone1 with{AetheryteId=200,Name="Far hub"},new(880,0,0));
+    var w=world with{Fates=[far],ZoneAetherytes=[hub]};
+    Assert(Selection.CloserAetheryte(far.Position,w,Options())?.Destination.AetheryteId==200);
+    Assert(Selection.CloserAetheryte(new(150,0,0),w,Options())==null, "Flying is cheaper when close");
+    var o=Options(); o.TeleportToCloserAetheryte=false;
+    Assert(Selection.CloserAetheryte(far.Position,w,o)==null);
+    var (r,rt)=Started(w);
+    r.Tick(w,1); r.Tick(w,2);
+    Assert(r.State==RunState.Teleporting && rt.Teleports.Last().AetheryteId==200);
+});
+Test("1.5 after a chain FATE, FatePilot waits for the next part and takes it", () =>
+{
+    var o=Options(); o.ReturnAfterFates=0;
+    var first=fate with{Position=Vector3.Zero,Chain=218};
+    var w=world with{Fates=[first],CurrentFate=1,Synced=true};
+    var (r,rt)=Started(w,o);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    r.Tick(w with{Fates=[first with{Progress=100,State=EventState.Ended}]},7);
+    Assert(r.Selected==null);
+    var other=fate with{Id=5,Position=new(40,0,0)};
+    r.Tick(w with{Fates=[other],CurrentFate=0},9);
+    Assert(r.Selected==null && r.Status.Contains("s)"), "Waits instead of taking an unrelated FATE");
+    var next=fate with{Id=2,Position=new(10,0,0),Chain=218};
+    r.Tick(w with{Fates=[other,next],CurrentFate=0},12);
+    Assert(r.Selected?.Id==2);
+});
 Test("1.4 knocked out of a combat FATE walks straight back in", () =>
 {
     var f0=fate with{Position=Vector3.Zero,Radius=20};
