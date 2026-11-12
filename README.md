@@ -5,7 +5,13 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.5.0 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.5.1 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Fixed in 1.5.1
+
+- **FATE NPC conversations advance again** (e.g. the Storm Courier). Interacting with an NPC does not always make it your target, and the conversation is recognised by its target, so its pages were left waiting until the session was interrupted. FatePilot now targets the verified NPC before talking to it, also recognises the conversation by the Talk window's speaker (that NPC's name), and finishes its own conversation even if the FATE was dropped meanwhile.
+
+175 local tests pass, with zero build warnings/errors.
 
 ### New in 1.5
 
