@@ -129,6 +129,9 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         lastStatus = InteractionStatus.Waiting;
         lastAdvance = 0;
         log(L.T("Interação enviada ao NPC/objeto do FATE {0}; aguardando o contexto do diálogo.", actor.FateId));
+        // 1.5.1: interacting does not always make the NPC the target, and the conversation is
+        // recognised by its target. Target it explicitly first.
+        Services.Targets.Target = obj;
         target->InteractWithObject((NativeObject*)obj.Address, true);
     }
 
@@ -158,7 +161,9 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         var second = framework == null ? default : new EventSignal(framework->EventState2.ObjectId.Id, framework->EventState2.EventId.Id);
         var sceneObject = framework == null ? 0 : framework->SceneGameObjectId.Id;
         var local = MatchingLocalDialogue(first.IsEmpty && second.IsEmpty && sceneObject is 0 or 0xE0000000);
-        var targeted = Services.Targets.Target?.GameObjectId == owned.Id;
+        // Ours while the verified NPC is the target, or while the Talk window is spoken by that very NPC
+        // (some conversations clear or change the target).
+        var targeted = Services.Targets.Target?.GameObjectId == owned.Id || OwnedSpeakerTalking();
         if (targeted && Visible("Talk")) lastOwnTalk = Now;
         var result = lease.Observe(Now, occupied || DialogueOpen, first, second, MatchingSelectorIndex() >= 0, sceneObject, local, targeted);
         if (result != lastStatus)
@@ -203,6 +208,19 @@ internal sealed unsafe class EventInteraction(Action<string> log)
         localEvidence = $"local bound={bound}; speakerAvailable={!string.IsNullOrWhiteSpace(speaker)}; speakerMatch={speakerMatches}; callbackPresent={receiver != 0}; talk={talk}; yesNo={yesNo}";
         return localDialogue.Observe(globalsEmpty, bound, talk, speakerMatches, yesNo, receiver, Now,
             Now - interactionSentAt <= LocalDialogueGuard.ConfirmWindow);
+    }
+
+    // The Talk window's speaker is the verified NPC we interacted with (sheet name; never logged).
+    private bool OwnedSpeakerTalking()
+    {
+        if (owned == null || !Visible("Talk")) return false;
+        var npc = Services.Objects.FirstOrDefault(o => o.GameObjectId == owned.Id);
+        var player = Services.Objects.LocalPlayer;
+        if (npc == null || player == null || Vector3.Distance(player.Position, npc.Position) > Math.Max(6, npc.HitboxRadius + 4)) return false;
+        var expected = npc.ObjectKind == ObjectKind.EventNpc
+            ? Services.Data.GetExcelSheet<ENpcResident>().GetRowOrDefault(npc.BaseId)?.Singular.ExtractText()
+            : npc is IBattleNpc b ? Services.Data.GetExcelSheet<BNpcName>().GetRowOrDefault(b.NameId)?.Singular.ExtractText() : null;
+        return DialogueSpeaker.Matches(expected, TalkSpeaker());
     }
 
     private static string? TalkSpeaker()
