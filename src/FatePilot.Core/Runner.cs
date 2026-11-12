@@ -167,7 +167,8 @@ public sealed partial class Runner(IRuntime runtime)
                 return;
             }
             if (w.OwnEventInteraction) interactionErrors = 0;
-            if (Selected != null && (w.OwnEventInteraction || w.EventInteractionPending))
+            // 1.5.1: our own conversation is finished even if the FATE was dropped meanwhile.
+            if (w.OwnEventInteraction || (Selected != null && w.EventInteractionPending))
             {
                 runtime.StopMovement();
                 runtime.SetCombat(false);
