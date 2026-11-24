@@ -118,16 +118,45 @@ Test("1.4 collection fights for drops, collects only when idle and hands in a ba
 {
     var collect=fate with{Kind=FateKind.Collection,HeldItems=4,Position=Vector3.Zero};
     var recipient=new ObjectiveActor(502,1,ObjectiveRole.Recipient,Vector3.Zero);
-    var pickup=new ObjectiveActor(504,1,ObjectiveRole.Pickup,Vector3.Zero);
+    var pickup=new ObjectiveActor(504,1,ObjectiveRole.Pickup,new(45,0,0));
     var mob=new EnemyInfo(90,1,new(3,0,0),1,false);
     var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[recipient,pickup],Enemies=[mob]};
     var (r,rt)=Started(w);
     for(int i=1;i<=6;i++)r.Tick(w,i);
-    Assert(rt.Interactions.Count==0 && rt.LastTarget==90 && rt.CombatEnabled);
-    r.Tick(w with{Enemies=[]},10);
+    Assert(rt.Interactions.Count==0 && rt.LastTarget==90 && rt.CombatEnabled, "A far item does not come before the fight");
+    r.Tick(w with{Enemies=[],Position=new(45,0,0)},10);
     Assert(rt.Interactions.Count==1 && rt.Interactions[0].Role==ObjectiveRole.Pickup);
     r.Tick(w with{Fates=[collect with{HeldItems=7}]},14);
     Assert(rt.Interactions.Last().Role==ObjectiveRole.Recipient);
+});
+Test("1.5.2 an item on the ground nearby is picked up before fighting a monster that is not attacking", () =>
+{
+    var collect=fate with{Kind=FateKind.Collection,HeldItems=0,Position=Vector3.Zero};
+    var pickup=new ObjectiveActor(504,1,ObjectiveRole.Pickup,new(6,0,0));
+    var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[pickup],Enemies=[new EnemyInfo(90,1,new(3,0,0),1,false)]};
+    var (r,rt)=Started(w);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    Assert(rt.LastMove==new Vector3(6,0,0) && !rt.CombatEnabled && rt.LastTarget!=90);
+    r.Tick(w with{Enemies=[new EnemyInfo(90,1,new(3,0,0),1,true)]},10);
+    Assert(rt.LastTarget==90 && rt.CombatEnabled, "What attacks us still comes first");
+});
+Test("1.5.2 a batch never asks for more items than the FATE still needs", () =>
+{
+    Assert(Runner.ItemsStillNeeded(88,5.5)==3 && Runner.ItemsStillNeeded(50,0)==null && Runner.ItemsStillNeeded(99,5.5)==1);
+    var o=Options(); o.CollectionBatchSize=16;
+    var collect=fate with{Kind=FateKind.Collection,HeldItems=16,Progress=0,Position=Vector3.Zero};
+    var recipient=new ObjectiveActor(502,1,ObjectiveRole.Recipient,Vector3.Zero);
+    var mob=new EnemyInfo(90,1,new(3,0,0),1,false);
+    var w=world with{Fates=[collect],CurrentFate=1,Synced=true,Objectives=[recipient],Enemies=[mob]};
+    var (r,rt)=Started(w,o);
+    for(int i=1;i<=6;i++) r.Tick(w,i);
+    r.Tick(w with{Fates=[collect with{HeldItems=0,HandedIn=16,Progress=0}]},7);
+    r.Tick(w with{Fates=[collect with{HeldItems=0,HandedIn=16,Progress=88}]},8);
+    var before=rt.Interactions.Count;
+    r.Tick(w with{Fates=[collect with{HeldItems=2,HandedIn=16,Progress=88}]},12);
+    Assert(rt.Interactions.Count==before && r.Status.Contains("3"), "2 of 3 needed: keeps fighting");
+    r.Tick(w with{Fates=[collect with{HeldItems=3,HandedIn=16,Progress=88}]},16);
+    Assert(rt.Interactions.Count==before+1 && rt.Interactions.Last().Role==ObjectiveRole.Recipient);
 });
 Test("Collection periodically delivers a partial batch without assuming completion", () =>
 {
