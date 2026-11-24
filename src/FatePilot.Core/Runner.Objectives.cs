@@ -11,6 +11,8 @@ public sealed partial class Runner
     private ObjectiveRole? interactionRole;
     private int interactionAttempts;
     private bool delivering;
+    // Items on the ground within this distance are picked up before fighting FATE monsters.
+    public const float NearbyPickup = 20f;
     private int lastObjectiveProgress = -1;
     private double lastStarterDiagnostic = -100;
 
@@ -25,6 +27,7 @@ public sealed partial class Runner
         interactionRole = null;
         interactionAttempts = 0;
         delivering = false;
+        progressPerItem = 0; pendingHandIns = 0; lastSeenProgress = progressBeforeHandIn = fate.Progress;
         lastObjectiveProgress = fate.Progress;
         lastStarterDiagnostic = now - 10;
         runtime.CancelEventInteraction();
@@ -52,8 +55,34 @@ public sealed partial class Runner
         if (now - since > 60) SkipOrFail(L.T("Não foi possível iniciar o FATE pelo NPC."), now);
     }
 
+    // 1.5.2: how much FATE progress one handed-in item is worth, learned from our own hand-ins
+    // (progress gained right after them). Lets FatePilot hand in what is still missing instead of a
+    // whole new batch: 16 handed in, 88% done -> 5.5% each -> 3 more finish it.
+    private double progressPerItem;
+    private int pendingHandIns, progressBeforeHandIn, lastSeenProgress;
+
+    // Items still needed to finish the FATE, or null while the rate is not known yet.
+    public static int? ItemsStillNeeded(int progress, double perItem) =>
+        perItem <= 0 ? null : Math.Max(1, (int)Math.Ceiling((100 - Math.Min(progress, 100)) / perItem - 0.0001));
+
+    private void LearnItemWorth(FateInfo f)
+    {
+        if (f.HandedIn > previousHandIns)
+        {
+            if (pendingHandIns == 0) progressBeforeHandIn = lastSeenProgress;
+            pendingHandIns += f.HandedIn - previousHandIns;
+        }
+        if (pendingHandIns > 0 && f.Progress > progressBeforeHandIn)
+        {
+            progressPerItem = (double)(f.Progress - progressBeforeHandIn) / pendingHandIns;
+            pendingHandIns = 0;
+        }
+        lastSeenProgress = f.Progress;
+    }
+
     private void ObserveCollectionProgress(FateInfo f, double now)
     {
+        LearnItemWorth(f);
         if (f.HeldItems != previousItems || f.HandedIn != previousHandIns)
         {
             if (f.HeldItems == 0) delivering = false;
@@ -94,15 +123,28 @@ public sealed partial class Runner
             var pickup = actors.Where(a => a.Role == ObjectiveRole.Pickup).MinBy(a => Vector3.Distance(w.Position, a.Position));
             var fateEnemy = w.Enemies.Any(e => e.FateId == f.Id);
             var finishing = f.State == EventState.Ending || f.Progress >= 90 || f.SecondsLeft < 90 || PendingReturnGoal != ReturnGoal.None;
-            delivering |= f.HeldItems > 0 && (f.HeldItems >= options.CollectionBatchSize || finishing || (!fateEnemy && pickup == null));
+            // 1.5.2: a batch never asks for more than the FATE still needs.
+            var needed = ItemsStillNeeded(f.Progress, progressPerItem);
+            var batch = Math.Min(options.CollectionBatchSize, needed ?? int.MaxValue);
+            delivering |= f.HeldItems > 0 && (f.HeldItems >= batch || finishing || (!fateEnemy && pickup == null));
+            // 1.5.2: items on the ground next to us come before fighting (only what attacks us comes first).
+            var nearbyPickup = pickup != null && !(delivering && f.HeldItems > 0)
+                && (!fateEnemy || Vector3.Distance(w.Position, pickup.Position) <= NearbyPickup) ? pickup : null;
             if (delivering && f.HeldItems > 0 && recipient != null)
             {
                 Status = L.T("Entregando itens do FATE: {0}", f.HeldItems);
                 ApproachAndInteract(w, recipient, now);
             }
+            else if (nearbyPickup != null)
+            {
+                Status = L.T("Recolhendo itens do FATE.");
+                ApproachAndInteract(w, nearbyPickup, now);
+            }
             else if (DefendObjective(w, f, now))
             {
-                Status = L.T("Lutando pelos itens do FATE ({0} na bolsa).", f.HeldItems);
+                Status = needed is { } left
+                    ? L.T("Lutando pelos itens do FATE ({0} na bolsa, faltam cerca de {1}).", f.HeldItems, left)
+                    : L.T("Lutando pelos itens do FATE ({0} na bolsa).", f.HeldItems);
             }
             else if (pickup != null && !(delivering && f.HeldItems > 0))
             {
