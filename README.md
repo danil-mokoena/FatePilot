@@ -5,7 +5,14 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.5.1 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.5.2 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### Improved in 1.5.2
+
+- **Collection FATEs hand in only what is still missing.** FatePilot learns how much progress each of your hand-ins is worth (e.g. 16 items took the FATE to 88% → 5.5% each) and stops asking for a whole new batch when a few items finish it (3 more, in that example). The status shows about how many are still needed. Until the first hand-in, the configured batch is used.
+- **Items on the ground come first.** In a collection FATE, an item within 20 yalms is picked up before fighting the FATE's monsters; only something attacking you comes before it.
+
+177 local tests pass, with zero build warnings/errors.
 
 ### Fixed in 1.5.1
 
