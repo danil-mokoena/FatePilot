@@ -10,7 +10,12 @@ internal static class IntegrationIds
     public const string AbilitiesSetAutoRotationConfigState = "WrathCombo.SetAutoRotationConfigState";
     public const string AbilitiesSetAutoRotationState = "WrathCombo.SetAutoRotationState";
     public const string AbilitiesSetCurrentJobAutoRotationReady = "WrathCombo.SetCurrentJobAutoRotationReady";
-    public const string ConflictingPositioningPlugin = "BossModReborn";
+    // 1.5.3: BossMod Reborn is a fork with the same IPC prefix; only one of the two may be loaded.
+    public const string AlternativePositioningPlugin = "BossModReborn";
+    public const string AlternativeAiCommand = "/bmrai";
+    public const string PositioningPresetsGetActive = "BossMod.Presets.GetActive";
+    public const string PositioningPresetsSetActive = "BossMod.Presets.SetActive";
+    public const string PositioningPresetsClearActive = "BossMod.Presets.ClearActive";
     public const string NavigationNavIsReady = "vnavmesh.Nav.IsReady";
     public const string NavigationNavPathfindCancelable = "vnavmesh.Nav.PathfindCancelable";
     public const string NavigationPathIsRunning = "vnavmesh.Path.IsRunning";

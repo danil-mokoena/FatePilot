@@ -28,9 +28,19 @@ internal sealed class Combat : IDisposable
         });
     }
 
-    private List<string> Config(params string[] args) => pi.GetIpcSubscriber<IReadOnlyList<string>, bool, List<string>>(IntegrationIds.PositioningConfiguration).InvokeFunc(args, false);
+    // 1.5.3: BossMod Reborn support. Same modules, presets and obstacle maps; differences handled here:
+    // one active preset instead of a list, and its AI has no readable on/off setting (only /bmrai).
+    internal static bool PositioningLoaded(string internalName) =>
+        Services.Plugin.InstalledPlugins.Any(p => p.IsLoaded && p.InternalName == internalName);
+    internal static bool Reborn => PositioningLoaded(IntegrationIds.AlternativePositioningPlugin) && !PositioningLoaded(IntegrationIds.PositioningPlugin);
+
+    private List<string> Config(params string[] args) => Reborn
+        ? pi.GetIpcSubscriber<List<string>, bool, List<string>>(IntegrationIds.PositioningConfiguration).InvokeFunc(args.ToList(), false)
+        : pi.GetIpcSubscriber<IReadOnlyList<string>, bool, List<string>>(IntegrationIds.PositioningConfiguration).InvokeFunc(args, false);
     private bool ReadAi()
     {
+        // Reborn exposes no AI state; FatePilot turns it off at start and cannot know whether to turn it back on.
+        if (Reborn) return false;
         var value = Config("AIConfig", "Enabled");
         if (value.Count != 1 || !bool.TryParse(value[0], out var enabled))
             throw new InvalidOperationException(L.T("módulo de posicionamento não reconheceu AIConfig.Enabled: ") + string.Join("; ", value));
@@ -38,12 +48,34 @@ internal sealed class Combat : IDisposable
     }
     private void WriteAi(bool enabled)
     {
+        if (Reborn)
+        {
+            if (enabled) return;
+            if (!Services.Commands.ProcessCommand(IntegrationIds.AlternativeAiCommand + " off"))
+                throw new InvalidOperationException(L.T("BossMod Reborn não aceitou o comando /bmrai off."));
+            log(L.T("BossMod Reborn: IA desligada com /bmrai off durante a sessão. Ao terminar, use /bmrai on se quiser a IA dele de volta."));
+            return;
+        }
         var result = Config("AIConfig", "Enabled", enabled.ToString());
         if (result.Count != 0) throw new InvalidOperationException(L.T("módulo de posicionamento recusou AIConfig.Enabled: ") + string.Join("; ", result));
     }
-    private List<string> ActiveList() => pi.GetIpcSubscriber<List<string>>(IntegrationIds.PositioningPresetsGetActiveList).InvokeFunc();
+    private List<string> ActiveList()
+    {
+        if (!Reborn) return pi.GetIpcSubscriber<List<string>>(IntegrationIds.PositioningPresetsGetActiveList).InvokeFunc();
+        // Reborn: one active preset; "" is its force-disabled preset, as in BossMod's list.
+        var name = pi.GetIpcSubscriber<string?>(IntegrationIds.PositioningPresetsGetActive).InvokeFunc();
+        return name == null ? [] : [name];
+    }
     private void SetList(List<string> names)
     {
+        if (Reborn)
+        {
+            if (names.Count == 0) { pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningPresetsClearActive).InvokeFunc(); return; }
+            if (names.Count > 1) log(L.T("BossMod Reborn ativa um preset por vez; restaurado: {0}", names[0]));
+            if (!pi.GetIpcSubscriber<string, bool>(IntegrationIds.PositioningPresetsSetActive).InvokeFunc(names[0]))
+                throw new InvalidOperationException(L.T("módulo de posicionamento recusou a lista de presets."));
+            return;
+        }
         if (!pi.GetIpcSubscriber<List<string>, bool>(IntegrationIds.PositioningPresetsSetActiveList).InvokeFunc(names))
             throw new InvalidOperationException(L.T("módulo de posicionamento recusou a lista de presets."));
     }

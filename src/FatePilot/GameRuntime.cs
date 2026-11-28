@@ -47,8 +47,13 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.NavigationNavIsReady).HasFunction
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.NavigationPathIsRunning).HasFunction
                 && pi.GetIpcSubscriber<Vector3,float,float,Vector3?>(IntegrationIds.NavigationQueryMeshNearestPointReachable).HasFunction),
-            ("BossMod · " + L.T("módulo de posicionamento: presets atuais + configuração"), pi.GetIpcSubscriber<List<string>>(IntegrationIds.PositioningPresetsGetActiveList).HasFunction
-                && pi.GetIpcSubscriber<List<string>, bool>(IntegrationIds.PositioningPresetsSetActiveList).HasFunction
+            ((Combat.Reborn ? "BossMod Reborn · " : "BossMod · ") + L.T("módulo de posicionamento: presets atuais + configuração"), (Combat.Reborn
+                    ? pi.GetIpcSubscriber<string?>(IntegrationIds.PositioningPresetsGetActive).HasFunction
+                        && pi.GetIpcSubscriber<string, bool>(IntegrationIds.PositioningPresetsSetActive).HasFunction
+                        && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningPresetsClearActive).HasFunction
+                        && Services.Commands.Commands.ContainsKey(IntegrationIds.AlternativeAiCommand)
+                    : pi.GetIpcSubscriber<List<string>>(IntegrationIds.PositioningPresetsGetActiveList).HasFunction
+                        && pi.GetIpcSubscriber<List<string>, bool>(IntegrationIds.PositioningPresetsSetActiveList).HasFunction)
                 && pi.GetIpcSubscriber<bool>(IntegrationIds.PositioningPresetsSetForceDisabled).HasFunction
                 && pi.GetIpcSubscriber<IReadOnlyList<string>, bool, List<string>>(IntegrationIds.PositioningConfiguration).HasFunction
                 && pi.GetIpcSubscriber<string, bool, bool>(IntegrationIds.PositioningPresetsCreate).HasFunction
@@ -75,11 +80,15 @@ internal sealed partial class GameRuntime : IRuntime, IDisposable
 
     public void Begin(RunOptions options)
     {
+        // 1.5.3: BossMod or BossMod Reborn, never both (they register the same IPC names). Say exactly what to change.
+        var bossMod = Combat.PositioningLoaded(IntegrationIds.PositioningPlugin);
+        var reborn = Combat.PositioningLoaded(IntegrationIds.AlternativePositioningPlugin);
+        if (bossMod && reborn)
+            throw new InvalidOperationException(L.T("BossMod e BossMod Reborn estão ativos ao mesmo tempo e disputam a mesma interface. Desative um dos dois em /xlplugins."));
+        if (!bossMod && !reborn)
+            throw new InvalidOperationException(L.T("Ative o BossMod ou o BossMod Reborn em /xlplugins: o FatePilot precisa de um deles para combate e posicionamento."));
         var missing = Dependencies().Where(x => !x.Available).Select(x => x.Name).ToList();
         if (missing.Count > 0) throw new InvalidOperationException(L.T("API indisponível: ") + string.Join(", ", missing));
-        if (Services.Plugin.InstalledPlugins.Count(p => p.IsLoaded && p.InternalName is IntegrationIds.PositioningPlugin or IntegrationIds.ConflictingPositioningPlugin) != 1
-            || !Services.Plugin.InstalledPlugins.Any(p => p.IsLoaded && p.InternalName == IntegrationIds.PositioningPlugin))
-            throw new InvalidOperationException(L.T("Carregue somente o módulo de posicionamento compatível. Versões alternativas podem disputar a mesma interface."));
         if (Services.Plugin.GetIpcSubscriber<bool>(IntegrationIds.TravelIsBusy).InvokeFunc()
             || Services.Plugin.GetIpcSubscriber<bool>(IntegrationIds.NavigationPathIsRunning).InvokeFunc())
             throw new InvalidOperationException(L.T("Há navegação/viagem em andamento. Pare a outra automação antes de iniciar."));
