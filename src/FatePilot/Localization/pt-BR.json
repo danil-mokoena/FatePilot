@@ -1,4 +1,11 @@
 {
+  "BossMod e BossMod Reborn estão ativos ao mesmo tempo e disputam a mesma interface. Desative um dos dois em /xlplugins.": "BossMod e BossMod Reborn estão ativos ao mesmo tempo e disputam a mesma interface. Desative um dos dois em /xlplugins.",
+  "Ative o BossMod ou o BossMod Reborn em /xlplugins: o FatePilot precisa de um deles para combate e posicionamento.": "Ative o BossMod ou o BossMod Reborn em /xlplugins: o FatePilot precisa de um deles para combate e posicionamento.",
+  "BossMod Reborn não aceitou o comando /bmrai off.": "BossMod Reborn não aceitou o comando /bmrai off.",
+  "BossMod Reborn: IA desligada com /bmrai off durante a sessão. Ao terminar, use /bmrai on se quiser a IA dele de volta.": "BossMod Reborn: IA desligada com /bmrai off durante a sessão. Ao terminar, use /bmrai on se quiser a IA dele de volta.",
+  "BossMod Reborn ativa um preset por vez; restaurado: {0}": "BossMod Reborn ativa um preset por vez; restaurado: {0}",
+  "Desative o BossMod Reborn em /xlplugins: ele disputa a mesma interface do BossMod. Mantenha só o BossMod ativo.": "Desative o BossMod Reborn em /xlplugins: ele disputa a mesma interface do BossMod. Mantenha só o BossMod ativo.",
+  "Ative o BossMod em /xlplugins: o FatePilot precisa dele para combate e posicionamento.": "Ative o BossMod em /xlplugins: o FatePilot precisa dele para combate e posicionamento.",
   "Lutando pelos itens do FATE ({0} na bolsa, faltam cerca de {1}).": "Lutando pelos itens do FATE ({0} na bolsa, faltam cerca de {1}).",
   "{0} fica mais perto de {1}: teleportando em vez de voar.": "{0} fica mais perto de {1}: teleportando em vez de voar.",
   "Aguardando a próxima parte da cadeia de FATEs ({0} s).": "Aguardando a próxima parte da cadeia de FATEs ({0} s).",
