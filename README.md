@@ -5,7 +5,14 @@
 
 FatePilot is an independent Dalamud plugin that coordinates FATE sessions across selected zones and instances. Set a route, choose a return goal, manage teleport costs and follow the session from a compact, multilingual dashboard.
 
-**Version:** 1.5.2 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+**Version:** 1.5.3 · **Dalamud API:** 15 · **Build:** .NET 10 / C#
+
+### New in 1.5.3
+
+- **BossMod Reborn support.** FatePilot now works with either BossMod or BossMod Reborn — one of them, not both, since they share the same interface. With Reborn, its single active preset is used, and its AI is turned off with `/bmrai off` at the start of a session; Reborn does not report whether its AI was on, so turn it back on with `/bmrai on` afterwards if you use it. Untested in game.
+- **Clearer start message.** When the positioning plugin blocks the start, the message now says exactly which plugin to enable or disable.
+
+177 local tests pass, with zero build warnings/errors.
 
 ### Improved in 1.5.2
 
@@ -307,7 +314,7 @@ For local development, extract the plugin ZIP from [Releases](https://github.com
 | Component | Role | Setup notes |
 |---|---|---|
 | [WrathCombo](https://github.com/PunishXIV/WrathCombo) | Combat abilities | IPC control must be available; FatePilot requests a temporary lease |
-| [BossMod](https://github.com/awgil/ffxiv_bossmod) | Positioning | Use the original compatible plugin; do not load conflicting variants together |
+| [BossMod](https://github.com/awgil/ffxiv_bossmod) | Positioning | BossMod or [BossMod Reborn](https://github.com/FFXIV-CombatReborn/BossmodReborn) — load only one of them |
 | [vnavmesh](https://github.com/awgil/ffxiv_navmesh) | Pathfinding | The current zone's navigation mesh must be ready |
 | [Lifestream](https://github.com/NightmareXIV/Lifestream) | Instance switching and aethernet | Enable Instance Switcher and open the aetheryte's instance menu once to discover the options. Also used for the Idyllshire aethernet gate into The Dravanian Hinterlands |
 

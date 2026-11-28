@@ -5,7 +5,7 @@ FatePilot uses separately installed components through local IPC contracts. Thei
 | Role | Component | Interfaces used |
 |---|---|---|
 | Combat abilities | [WrathCombo](https://github.com/PunishXIV/WrathCombo) | Temporary lease, job preparation, configuration, activation and release |
-| Positioning | [BossMod](https://github.com/awgil/ffxiv_bossmod) | Configuration, movement presets and temporary obstacle maps |
+| Positioning | [BossMod](https://github.com/awgil/ffxiv_bossmod) or [BossMod Reborn](https://github.com/FFXIV-CombatReborn/BossmodReborn) (one at a time) | Configuration, movement presets and temporary obstacle maps; with Reborn, single active preset and `/bmrai off` |
 | Navigation | [vnavmesh](https://github.com/awgil/ffxiv_navmesh) | Cancelable pathfinding, MoveTo, Stop and reachable-point queries |
 | Instance switching | [Lifestream](https://github.com/NightmareXIV/Lifestream) | ChangeInstance, IsBusy, Abort, CanChangeInstance and instance discovery |
 
